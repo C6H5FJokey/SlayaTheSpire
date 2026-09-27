@@ -65,7 +65,7 @@
 |---|---|
 | `0` | 正常结束 |
 | `2` | 连不上模组（游戏没起 / 没勾选模组） |
-| `3` | Laya 启动预检失败（`--skip-preflight` 可跳过） |
+| `3` | Laya 启动预检失败（最常见的原因是根本没起 Laya，见「快速开始」第 3 步；`--skip-preflight` 可跳过） |
 | `4` | 模型不可用 / 解析失败，按 `on_error=stop` 停跑 |
 | `5` | 模组对不上话（协议版本不符 / 拒绝 `configure`）—— 通常是装的是旧 jar |
 | `130` | Ctrl-C |
@@ -103,12 +103,20 @@ pwsh -File tools/install_mod.ps1        # 复制到 <STS>\mods\
 #    模组配置走 MTS 的 SpireConfig("spireagent", "SlayaTheSpire")，只读 host / port（默认 127.0.0.1:17777）；
 #    不改端口就不用建这个文件。模式与 watchdog 由 agent 握手时推送，不需要配。
 
-# 3) 准备配置：API Key 走环境变量，不要写进文件
+# 3) 起 Laya —— agent 不会替你起它：base_url 那个端口上必须真有个进程在监听
+#    ★ 自己开一个 PowerShell 窗口跑，别塞进当下的临时 shell —— 服务归启动它的那个终端，
+#      终端一关端口就空了，症状就是 agent 预检报 WinError 10061（连接被拒绝）。
+#    真模型（本机 GPU、离线、首次加载几十秒；没装过先跑 tools/setup_laya.ps1）：
+pwsh -File tools/serve_laya.ps1
+#    确认真在监听：netstat -ano | Select-String ':8000'     # 要看到 LISTENING
+#    没有 GPU / 只想先验链路：见下面「没有远端 Laya 时…」（假 Laya，不是模型）
+
+# 4) 准备配置：API Key 走环境变量，不要写进文件
 Copy-Item packages/spire-agent/config.example.toml spire.local.toml
 $env:LAYA_API_KEY = "..."
-$env:LAYA_BASE_URL = "http://<你的 Laya 主机>:8000"
+$env:LAYA_BASE_URL = "http://<你的 Laya 主机>:8000"   # 本机 Laya 就是 http://127.0.0.1:8000
 
-# 4) 自检 + 开跑（用 venv 里的解释器：不需要激活，也不需要 PYTHONPATH）
+# 5) 自检 + 开跑（用 venv 里的解释器：不需要激活，也不需要 PYTHONPATH）
 .\.venv\Scripts\python.exe -m spire_agent doctor --config spire.local.toml
 .\.venv\Scripts\python.exe -m spire_agent run    --config spire.local.toml
 ```

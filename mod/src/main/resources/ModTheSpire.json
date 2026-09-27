@@ -1,0 +1,10 @@
+{
+  "modid": "spireagent",
+  "name": "SlayaTheSpire Agent",
+  "author_list": ["SlayaTheSpire"],
+  "description": "Loopback NDJSON bridge that exposes stable Slay the Spire 1 observations and accepts semantic actions, for the SlayaTheSpire AI agent. No third-party dependencies.",
+  "version": "0.1.0",
+  "sts_version": "12-18-2022",
+  "mts_version": "3.30.0",
+  "dependencies": ["basemod"]
+}

@@ -1,0 +1,82 @@
+# 决策点问题模板。
+#
+# 每个决策点可以定义：
+#   question_id / type / instructions  —— 主问题
+#   prelude                            —— 先导判断题（虚拟思考链，v1 默认空）
+#
+# 用 TOML 而不是 YAML：core 包刻意零第三方依赖，tomllib 是 Python 3.11+ 标准库。
+
+[decision_points.combat_play]
+question_id = "q_action"
+type = "choice"
+# `{character}` / `{ascension}` 由 questions.build 按当前局面填入 —— 写死角色
+# 会让 Watcher 的局面收到"你在扮演 Ironclad"，数据集里就是这么错的。
+instructions = "You are playing Slay the Spire as the {character} at Ascension {ascension}. Given the state above, choose the single best action. Consider lethal, incoming damage, energy efficiency and long-term deck value."
+prelude = []
+
+[decision_points.select_target]
+question_id = "q_target"
+type = "choice"
+instructions = "Choose which enemy to target with the card you just played."
+prelude = []
+
+[decision_points.select_card_must_k]
+question_id = "q_pick"
+type = "choice"
+instructions = "You must select a card for the current card-selection screen ({select_purpose}). Choose the single best one; you will be asked again until the required number is reached."
+prelude = []
+
+[decision_points.select_card_any]
+question_id = "q_card"
+type = "score"
+instructions = "Rate how good it is to select this card for the current card-selection screen ({select_purpose}). You may select any number of cards, including none."
+levels = ["very bad", "bad", "neutral", "good", "very good"]
+prelude = []
+
+[decision_points.map_node]
+question_id = "q_map"
+type = "choice"
+instructions = "Choose which node to travel to next on the act map. Weigh immediate risk (HP, potions) against long-term growth (upgrades, relics, card rewards). The whole act map is visible to you."
+prelude = []
+
+[decision_points.card_reward]
+question_id = "q_reward"
+type = "choice"
+instructions = "Choose a card reward for your deck, or skip all of them. Taking a card you will never play only dilutes your deck."
+prelude = []
+
+[decision_points.relic_select]
+question_id = "q_relic"
+type = "choice"
+instructions = "Choose which relic to take."
+prelude = []
+
+[decision_points.event_option]
+question_id = "q_event"
+type = "choice"
+instructions = "Choose how to resolve this event ({event_name}). Read the event text in the state before deciding."
+prelude = []
+
+[decision_points.shop]
+question_id = "q_shop"
+type = "choice"
+instructions = "Decide what to buy in this shop. You will be asked again after each purchase, so buy the single most valuable item now, or leave."
+prelude = []
+
+[decision_points.rest_site]
+question_id = "q_rest"
+type = "choice"
+instructions = "Choose what to do at the rest site."
+prelude = []
+
+[decision_points.neow_bonus]
+question_id = "q_neow"
+type = "choice"
+instructions = "Choose your starting bonus from Neow."
+prelude = []
+
+[decision_points.generic_choice]
+question_id = "q_choice"
+type = "choice"
+instructions = "Choose one of the available options."
+prelude = []

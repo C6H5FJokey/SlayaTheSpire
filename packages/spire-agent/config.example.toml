@@ -1,0 +1,63 @@
+# SlayaTheSpire agent 配置示例。
+#
+# 复制一份再改：`cp packages/spire-agent/config.example.toml spire.local.toml`
+# （`*.local.toml` 已在 .gitignore 里）
+#
+# API Key 建议走环境变量 LAYA_API_KEY，不要写进文件。
+
+mode = "agent"                 # agent | observe_human（唯一的模式开关；用 --mode 可临时覆盖）
+character = "IRONCLAD"
+ascension = 0
+allow_save_scum = false        # 默认禁止 SL：协议层也没有读档动作
+watchdog_sec = 30              # agent 握手时推给模组（模组没有自己的看门狗配置）
+fairness_mode = "strict"       # strict | omniscient（omniscient 只用于离线实验）
+seed = -1                      # -1 = 随机；固定种子可重放
+auto_restart = true            # 局终后提示重开（v1 不代打主菜单）
+max_rooms = 0                  # 0 = 不限
+log_level = "INFO"
+log_file = "spire_agent.log"
+templates_path = ""            # 空 = 用 core 内置的 decision_points.toml
+
+[mod]
+host = "127.0.0.1"
+port = 17777                   # 必须与模组 config 的 port 一致
+connect_timeout_sec = 10.0
+heartbeat_sec = 5.0
+reconnect_min_sec = 1.0
+reconnect_max_sec = 30.0
+max_frame_bytes = 4194304
+
+[laya]
+base_url = "http://127.0.0.1:8000"
+api_key = ""                   # 留空并设置环境变量 LAYA_API_KEY
+model = "english"              # english | multilingual | typed-decisions | ""（Router 自选）
+timeout_sec = 5.0
+retries = 3
+backoff_base_sec = 0.5
+cache = true
+cache_size = 512
+prefer_multilingual_over_chars = 6000
+on_error = "stop"              # stop（默认）= 拿不到模型决策就报错停跑，绝不替模型猜 | fallback = 规则兜底打完这局
+preflight = true               # run 启动时先探一次 Laya；连不上就不开跑（--skip-preflight 可跳过）
+
+[panel]
+enabled = true
+host = "127.0.0.1"             # 只允许 loopback
+port = 8788
+timeline_size = 30
+
+[record]
+runs_dir = "runs"
+save_raw_states = true         # 原始未过滤观测另存，供离线实验/复核
+
+[dataset]
+dir = "dataset"
+exclude_post_sl_rooms = true   # SL 之后那一间房的标签被非公平信息污染
+exclude_fallback_rows = true   # 兜底行没有模型参与，不进训练
+exclude_unmatched = true       # observe_human 里没被枚举到的动作
+val_ratio = 0.1
+test_ratio = 0.1
+split_seed = 20260927
+
+[observe_human]
+also_query_model = true        # 人类玩的同时也问一次模型，作为对照

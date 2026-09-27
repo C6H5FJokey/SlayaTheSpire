@@ -185,7 +185,7 @@ public final class SelfTest {
         ctx.hand = 3;
         ctx.playable = new boolean[] {true, false, true};
         ctx.needsTarget = new boolean[] {true, false, false};
-        ctx.monsters = 2;
+        ctx.monstersAlive = new boolean[] {true, true};
         ctx.potions = 4;
         ctx.potionEmpty = new int[] {0, 1, 0, 0};        // 1 = 空槽
         ctx.potionUsable = new int[] {1, 0, 1, 0};        // slot3 有药水但当前不可用
@@ -205,6 +205,21 @@ public final class SelfTest {
                 ActionSpec.validate(ActionSpec.PLAY_CARD, args("hand_index", 0, "target", "x1"), ctx).code);
         eq("spec/play-dead-target", Errors.INDEX_RANGE,
                 ActionSpec.validate(ActionSpec.PLAY_CARD, args("hand_index", 0, "target", "m5"), ctx).code);
+
+        // 击杀之后下标不移位：room.monsters.monsters 只增不减，尸体继续占位。
+        // 这就是真机那一局：两个敌人、杀掉 m0，活着的那个仍然是 m1（而不是 m0）。
+        ctx.monstersAlive = new boolean[] {false, true};
+        eq("spec/target-after-kill-m1-ok", null,
+                ActionSpec.validate(ActionSpec.PLAY_CARD, args("hand_index", 0, "target", "m1"), ctx).code);
+        eq("spec/target-after-kill-m0-dead", Errors.INDEX_RANGE,
+                ActionSpec.validate(ActionSpec.PLAY_CARD, args("hand_index", 0, "target", "m0"), ctx).code);
+        eq("spec/select-choice-after-kill-m1-ok", null,
+                ActionSpec.validate(ActionSpec.SELECT_CHOICE, args("monster", 1), ctx).code);
+        eq("spec/select-choice-after-kill-m0-dead", Errors.INDEX_RANGE,
+                ActionSpec.validate(ActionSpec.SELECT_CHOICE, args("monster", 0), ctx).code);
+        eq("spec/potion-target-after-kill-m1-ok", null,
+                ActionSpec.validate(ActionSpec.USE_POTION, args("potion_index", 0, "target", "m1"), ctx).code);
+        ctx.monstersAlive = new boolean[] {true, true};
         eq("spec/play-missing-arg", Errors.ILLEGAL_ACTION,
                 ActionSpec.validate(ActionSpec.PLAY_CARD, args(), ctx).code);
 
@@ -635,7 +650,7 @@ public final class SelfTest {
         int hand;
         boolean[] playable = new boolean[0];
         boolean[] needsTarget = new boolean[0];
-        int monsters;
+        boolean[] monstersAlive = new boolean[0];
         int potions;
         int[] potionEmpty = new int[] {};
         int[] potionUsable = new int[] {};
@@ -668,8 +683,8 @@ public final class SelfTest {
             return handIndex >= 0 && handIndex < needsTarget.length && needsTarget[handIndex];
         }
 
-        public int aliveMonsterCount() {
-            return monsters;
+        public boolean isLiveMonster(int index) {
+            return index >= 0 && index < monstersAlive.length && monstersAlive[index];
         }
 
         public int potionSlots() {

@@ -18,8 +18,14 @@ public interface ActionContext {
     /** 该手牌是否必须指定目标（单体攻击/单体技能）。 */
     boolean handCardNeedsTarget(int handIndex);
 
-    /** 场上活着的敌人数量；target 的合法下标是 [0, aliveMonsterCount)。 */
-    int aliveMonsterCount();
+    /**
+     * 游戏数组下标 index 上的敌人是否在场且活着 —— 这就是 mN 的合法判据。
+     *
+     * 判据**不是** "index < 活着的敌人数"：room.monsters.monsters 在整场战斗里只增不减，
+     * 尸体继续占位，所以杀掉 m0 之后活着的那个仍然是 m1。拿"活着的数量"当上界，
+     * 会让这次击杀之后所有带目标的动作全部被判越界。
+     */
+    boolean isLiveMonster(int index);
 
     int potionSlots();
 

@@ -120,11 +120,10 @@ public final class Actor {
         String targetId = Json.asString(args.get("target"), null);
         if (targetId != null) {
             Integer mi = ActionSpec.monsterIndex(targetId);
-            List<AbstractMonster> alive = Observer.aliveMonsters();
-            if (mi == null || mi.intValue() < 0 || mi.intValue() >= alive.size()) {
+            target = mi == null ? null : Observer.monsterAt(mi.intValue());
+            if (target == null) {
                 return Errors.fail(Errors.INDEX_RANGE, "bad target: " + targetId);
             }
-            target = alive.get(mi.intValue());
         }
         // 游戏自己的出牌入口：CardQueueItem 会把目标一并带进牌的效果结算，
         // 因此不需要"先点牌再点敌人"那套鼠标流程。
@@ -137,8 +136,18 @@ public final class Actor {
         if (p == null) {
             return Errors.fail(Errors.SCREEN_MISMATCH, "not in combat");
         }
+        // 只置 endTurnQueued —— 这是"结束回合"按钮按下去之后游戏自己做的唯一一件事
+        // （EndTurnButton.disable(true) 也只做这一件，外加音效和按钮文案）。
+        //
+        // 真正的闸门在 AbstractPlayer.updateInput()：它要等到 cardQueue 清空、且 actionManager
+        // 交还控制权（!hasControl）之后，才把 endTurnQueued 换成 isEndingTurn。而 AbstractRoom.update()
+        // 只要看到 isEndingTurn 为真，下一帧就把整套 EndTurnAction + WaitAction +
+        // MonsterStartTurnAction 排进队列（AbstractRoom$1）。
+        //
+        // 顺手把 isEndingTurn 也置真就等于绕过那道闸门：出牌还没结算完，敌人回合就已经排进去了
+        // （回合结束效果错序甚至丢失）；而且 endTurnQueued 没走 updateInput 的分支、会一直留在 true，
+        // 等控制权回来时再触发一次 —— 表现就是"连续弹出两次敌人回合"。
         p.endTurnQueued = true;
-        p.isEndingTurn = true;
         return Errors.ok();
     }
 
@@ -180,11 +189,7 @@ public final class Actor {
         if (mi == null) {
             return null;
         }
-        List<AbstractMonster> alive = Observer.aliveMonsters();
-        if (mi.intValue() < 0 || mi.intValue() >= alive.size()) {
-            return null;
-        }
-        return alive.get(mi.intValue());
+        return Observer.monsterAt(mi.intValue());
     }
 
     // ------------------------------------------------------------- 通用选项
@@ -256,10 +261,10 @@ public final class Actor {
             return Errors.fail(Errors.SCREEN_MISMATCH,
                     "no card is being aimed; put the target in play_card/use_potion instead");
         }
-        List<AbstractMonster> alive = Observer.aliveMonsters();
-        if (monsterIndex < 0 || monsterIndex >= alive.size()) {
+        AbstractMonster chosen = Observer.monsterAt(monsterIndex);
+        if (chosen == null) {
             return Errors.fail(Errors.INDEX_RANGE,
-                    "monster " + monsterIndex + " out of range [0," + alive.size() + ")");
+                    "monster m" + monsterIndex + " is not a live enemy");
         }
         AbstractCard card = p.hoveredCard;
         if (p.hand == null || p.hand.group == null || !p.hand.group.contains(card)) {
@@ -268,8 +273,7 @@ public final class Actor {
         p.inSingleTargetMode = false;
         Reflect.set(p, AbstractPlayer.class, "hoveredMonster", null);
         p.hoveredCard = null;
-        AbstractDungeon.actionManager.addCardQueueItem(
-                new CardQueueItem(card, alive.get(monsterIndex)), true);
+        AbstractDungeon.actionManager.addCardQueueItem(new CardQueueItem(card, chosen), true);
         return Errors.ok();
     }
 

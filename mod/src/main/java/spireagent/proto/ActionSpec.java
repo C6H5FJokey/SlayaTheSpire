@@ -102,9 +102,8 @@ public final class ActionSpec {
                 if (!ctx.inCombat()) {
                     return mismatch("target selection outside combat");
                 }
-                if (mi.intValue() < 0 || mi.intValue() >= ctx.aliveMonsterCount()) {
-                    return new Result(Errors.INDEX_RANGE, "monster " + mi
-                            + " out of range, only " + ctx.aliveMonsterCount() + " enemies alive");
+                if (!ctx.isLiveMonster(mi.intValue())) {
+                    return new Result(Errors.INDEX_RANGE, "monster m" + mi + " is not a live enemy");
                 }
                 return OK;
             }
@@ -230,9 +229,8 @@ public final class ActionSpec {
             if (mi == null) {
                 return new Result(Errors.ILLEGAL_ACTION, "target must look like \"m0\": " + target);
             }
-            if (mi.intValue() >= ctx.aliveMonsterCount()) {
-                return new Result(Errors.INDEX_RANGE, "target " + target
-                        + " out of range, only " + ctx.aliveMonsterCount() + " enemies alive");
+            if (!ctx.isLiveMonster(mi.intValue())) {
+                return new Result(Errors.INDEX_RANGE, "target " + target + " is not a live enemy");
             }
         }
         return OK;
@@ -261,7 +259,7 @@ public final class ActionSpec {
                         "potion " + slot + " requires args.target");
             }
             Integer mi = monsterIndex(target);
-            if (mi == null || mi.intValue() >= ctx.aliveMonsterCount()) {
+            if (mi == null || !ctx.isLiveMonster(mi.intValue())) {
                 return new Result(Errors.INDEX_RANGE, "bad potion target: " + target);
             }
         } else if (target != null) {

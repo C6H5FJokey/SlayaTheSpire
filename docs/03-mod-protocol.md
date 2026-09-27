@@ -160,6 +160,17 @@ python -m spire_agent doctor --mode observe_human      # 只验握手 + configur
 约定：
 
 - 索引一律 0-based，对应**同一次 `observation` 中 `raw` 数组的下标**。若 agent 基于过期的 `seq` 发动作，mod 直接拒绝（见下）。
+- 敌人 id `m<i>` 的 `i` 是 `room.monsters.monsters` 里的**绝对下标**，不是"活着敌人中的序号"：
+  **死亡不移位**（尸体继续占位）。两个敌人杀掉 `m0` 之后，活着的那个仍然是 `m1`。
+  因此校验判据必须是"下标 `i` 上的敌人是否活着"，而**不是** `i < 活着的数量` ——
+  后者会让第一次击杀之后所有带目标的动作被判越界，真机症状是"模型答了牌、agent 不执行"。
+- `end_turn` **只写 `endTurnQueued`**，绝不同时写 `isEndingTurn`。这是游戏自己的分工：
+  `AbstractPlayer.updateInput()` 要等到 `cardQueue` 清空、且 `actionManager` 交还控制权
+  （`!hasControl`）之后，才把 `endTurnQueued` 换成 `isEndingTurn`；而 `AbstractRoom.update()`
+  只要看到 `isEndingTurn` 为真，**下一帧**就把 `EndTurnAction + WaitAction + MonsterStartTurnAction`
+  整排入队。绕过那道闸门 = 出牌还没结算完敌人回合就已经排进去（回合结束效果错序甚至丢失），
+  而且 `endTurnQueued` 没走 `updateInput` 的分支、会一直留在 `true`，等控制权回来时再触发一次 ——
+  真机表现就是"连续弹出两次敌人回合"。
 - 每个动作携带 `seq`：agent 必须声明它是基于哪个观测做的决策。mod 校验 `seq` 是否等于最近一次发出的 `observation.seq`，不等则回 `E_STALE_SEQ`。**这防止 agent 用旧状态做出越权动作。**
 - `select_cards` 的 `indices` 必须满足当前界面的约束（最少/最多张数），由 mod 校验。
 - 同名动作在不同界面语义不同的只有 `select_reward` 一个（上表已注明）。**之所以共用一个名字**：core 的 `card_reward` 决策点用同一个候选前缀 `reward:<i>` 表示"拿第 i 项"，解析出来就是 `select_reward`。曾经这里被写成"只允许战斗奖励界面"，真机后果是**卡牌奖励永远被拒**（`E_SCREEN_MISMATCH`），游戏只能靠人类点或 30s 看门狗推过去。

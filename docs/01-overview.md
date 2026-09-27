@@ -112,6 +112,7 @@ character = "IRONCLAD"
 ascension = 0
 allow_save_scum = false
 watchdog_sec = 30
+decision_delay_sec = 0.0    # 每个动作前的固定延迟（秒）；0 = 全速，演示设 1.0~3.0
 fairness_mode = "strict"    # strict | omniscient
 
 [mod]   host/port          # mod 的 loopback TCP 服务地址（模组侧唯一需要配的东西）

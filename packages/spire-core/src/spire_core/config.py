@@ -86,6 +86,7 @@ class AgentConfig:
     ascension: int = 0
     allow_save_scum: bool = False
     watchdog_sec: int = 30
+    decision_delay_sec: float = 0.0   # 每个动作前的固定延迟（秒）；0 = 全速。演示用
     fairness_mode: str = "strict"
     seed: int = -1
     auto_restart: bool = True
@@ -159,6 +160,13 @@ def validate(cfg: AgentConfig) -> list[str]:
         warnings.append(
             "laya.on_error=fallback：模型不可用时用规则兜底，产出的行 label_source=fallback，"
             "默认不进训练集"
+        )
+    if cfg.decision_delay_sec < 0:
+        warnings.append(f"decision_delay_sec={cfg.decision_delay_sec} 为负，按 0（全速）处理")
+    if cfg.mode == MODE_AGENT and cfg.decision_delay_sec >= cfg.watchdog_sec:
+        warnings.append(
+            f"decision_delay_sec={cfg.decision_delay_sec} >= watchdog_sec={cfg.watchdog_sec}："
+            "慢到模组看门狗会先替你出手（战斗内结束回合）"
         )
     return warnings
 

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -604,6 +605,16 @@ class AgentRunner:
 
     # ------------------------------------------------------------ agent 决策
 
+    def _pace(self) -> None:
+        """演示用的节流：把两个动作之间的间隔拉到人能看清的长度。
+
+        只影响**执行**：观测、构题、落盘仍然全速，模型调用也不受影响。
+        默认 0，留给测试与强化训练跑批。
+        """
+        delay = self.config.decision_delay_sec
+        if delay > 0:
+            time.sleep(delay)
+
     def decide_and_send(
         self, seq: int, fair: FairObservation, plan: Plan, room: dict[str, Any]
     ) -> None:
@@ -637,6 +648,7 @@ class AgentRunner:
             )
             return
         wire = decision.chosen_action
+        self._pace()
         message_id = self.bridge.send_action(
             seq=seq, kind=wire["kind"], args=wire.get("args") or {}
         )
@@ -1033,8 +1045,10 @@ class AgentRunner:
             log.error("cannot retry: the armed plan is gone")
             return
         plan = self.armed.plan
+        # 不把出牌候选排除在外：docs/03 的约定是"次优候选"，不是"次优的非出牌候选"。
+        # 之前这里会把被拒的出牌换成 end_turn —— 模型答了牌、模组拒了牌、agent 却直接
+        # 结束回合，看上去就是"模型返回了结果但 agent 不执行"，而且白扔一个回合。
         remaining = [c for c in plan.candidate_ids if c not in inflight.tried]
-        remaining = [c for c in remaining if not A.is_card_candidate(c)]
         if not remaining:
             log.error("no alternative candidate left; letting the watchdog act")
             return

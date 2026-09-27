@@ -10,6 +10,7 @@ character = "IRONCLAD"
 ascension = 0
 allow_save_scum = false        # 默认禁止 SL：协议层也没有读档动作
 watchdog_sec = 30              # agent 握手时推给模组（模组没有自己的看门狗配置）
+decision_delay_sec = 0.0       # 每个动作前的固定延迟（秒）。0 = 全速（测试/跑批）；演示设 1.0~3.0
 fairness_mode = "strict"       # strict | omniscient（omniscient 只用于离线实验）
 seed = -1                      # -1 = 随机；固定种子可重放
 auto_restart = true            # 局终后提示重开（v1 不代打主菜单）

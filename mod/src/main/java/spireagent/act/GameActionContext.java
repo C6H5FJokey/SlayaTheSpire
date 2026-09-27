@@ -58,8 +58,8 @@ public final class GameActionContext implements ActionContext {
         return card != null && card.target == AbstractCard.CardTarget.ENEMY;
     }
 
-    public int aliveMonsterCount() {
-        return Observer.aliveMonsters().size();
+    public boolean isLiveMonster(int index) {
+        return Observer.monsterAt(index) != null;
     }
 
     // ------------------------------------------------------------- 药水

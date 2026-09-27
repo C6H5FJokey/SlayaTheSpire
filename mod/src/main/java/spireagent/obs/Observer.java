@@ -617,6 +617,34 @@ public final class Observer {
         return out;
     }
 
+    /**
+     * 按**游戏数组下标**取一个还在场上的敌人。
+     *
+     * 这个坐标系必须和 {@link #monstersJson} 发出去的 index、以及 {@link #monsterIndexOf}
+     * 报出去的人类目标保持一致。它的关键性质是**死亡不移位**：room.monsters.monsters
+     * 在整场战斗里只增不减，尸体继续占位，所以杀掉 m0 之后剩下的那个敌人仍然是 m1。
+     * 反过来说，任何"先过滤出活着的、再按下标取"的写法都会在第一次击杀后整体错位。
+     *
+     * @return 越界、还没出生、或已经死亡/逃跑/空血的，一律返回 null
+     */
+    public static AbstractMonster monsterAt(int index) {
+        try {
+            AbstractRoom room = AbstractDungeon.getCurrRoom();
+            if (room == null || room.monsters == null || room.monsters.monsters == null) {
+                return null;
+            }
+            if (index < 0 || index >= room.monsters.monsters.size()) {
+                return null;
+            }
+            AbstractMonster m = room.monsters.monsters.get(index);
+            if (m == null || m.isDead || m.isEscaping || m.currentHealth <= 0) {
+                return null;
+            }
+            return m;
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
     public static int monsterIndexOf(AbstractMonster target) {
         try {
             AbstractRoom room = AbstractDungeon.getCurrRoom();

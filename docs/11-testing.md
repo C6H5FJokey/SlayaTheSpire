@@ -129,6 +129,9 @@ def test_fair_view_has_no_hidden_info(raw_fixture):
   以及**校验失败时不泄漏半成品状态**（`mode` 必须为 null、秒数回落默认）；
 - NDJSON 分帧：半包/粘包/超长行的行为；
 - `ActionSpec` 白名单校验：非法 kind、越界 index、缺参、多余的 target；
+  其中**击杀后下标不移位**是必测项：两个敌人、`m0` 已死，则 `m1` 必须放行、`m0` 必须拒
+  （`play_card` / `use_potion` / `select_choice` 三条路径都要覆盖）。判据是"下标 i 上的敌人是否活着"，
+  不是 `i < 活着的数量` —— 后者会在第一次击杀后把所有带目标的动作判成越界。
 - `Watchdog`：用假时钟推进，断言超时触发与动作选择（战斗内 vs 非战斗界面）；
 - `PotionFacts`：`PotionSlot.canUse()` 对**空槽**也返回 true，所以模组报的 `can_use` 必须
   过一层 `PotionFacts` 压成 false；漏了它，agent 会把空槽当成可用的药水（真机踩过：选一次被拒

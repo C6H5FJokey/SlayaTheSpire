@@ -106,7 +106,11 @@ def identify(fair: FairObservation) -> str:
         return SHOP
 
     if screen == SCREEN_REST:
-        return REST_SITE
+        # A campfire briefly remains the active screen after the player commits
+        # an option. Once its UI is hidden, the remaining action is the room's
+        # Proceed button; without either live campfire buttons or Proceed there
+        # is nothing for the agent to do.
+        return REST_SITE if s.rest_options or s.options else RUN_OVER
 
     if screen == SCREEN_NEOW:
         return NEOW_BONUS

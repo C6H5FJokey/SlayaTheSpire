@@ -254,6 +254,9 @@ powershell -File tools\test_mod.ps1
 
 # Laya 健康检查
 .\.venv\Scripts\python.exe tools\laya_health.py --base-url http://127.0.0.1:8000 --api-key test
+
+# 在仓库根直接 pytest 就是上面这些的合集（testpaths = packages finetune，见根目录 pytest.ini）
+.\.venv-laya\Scripts\python.exe -m pytest -q
 ```
 
 没有远端 Laya 时想跑 L4 的链路（桥接 → 构题 → 请求 → 仲裁 → 执行 → 落盘 → 面板），
@@ -271,6 +274,20 @@ powershell -File tools\test_mod.ps1
 
 它编一串"观察 → 人类动作 → 换房提交 → 读档回滚"落到 `.pytest-tmp\demo\`，再跑真的
 `dataset/export.py`，用于核对 observe_human 的 schema、`matched`、`post_sl`、模型对照字段。
+
+## 微调链路（`finetune/tests`）
+
+微调脚本是纯离线的：用一份**缩小的真 checkpoint** 做端到端断言（build -> train -> eval -> serve），
+不连游戏、不联网（HF 缓存指向仓库内、`HF_HUB_OFFLINE=1`）。
+
+```powershell
+.\.venv-laya\Scripts\python.exe -m pytest finetune\tests -q                 # 全量（需要 torch / laya）
+.\.venv\Scripts\python.exe -m pytest finetune\tests -q -p no:cacheprovider # 只跑纯逻辑，torch 相关自动 skip
+```
+
+留出集有两种，别混：`dataset/val.jsonl` / `test.jsonl` 是**按 run 切分**的泛化留出（现在为空，只有一局）；
+`finetune/out/dev_*.jsonl` 是 `build` 从 train 里**按房间**切出的训练期留出（数字偏乐观）。
+细节见 [13-finetune](13-finetune.md)。
 
 ## 相关文档
 

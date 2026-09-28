@@ -154,6 +154,21 @@ def test_card_select_any_uses_same_candidates():
     ]
 
 
+def test_empty_optional_card_selection_submits_empty_selection():
+    raw = combat_observation()
+    raw["screen"] = "GRID"
+    raw["in_combat"] = True
+    raw["screen_state"] = {
+        "min_select": 0,
+        "max_select": 0,
+        "select_cards": [],
+    }
+    f = fair(raw)
+    cands = enumerate_candidates(f, SELECT_CARD_ANY)
+    assert [c.cid for c in cands] == [A.EMPTY_SELECTION]
+    assert cands[0].action == A.select_cards([])
+
+
 def test_map_node_candidates_follow_reachable_order():
     f = fair(map_observation(reachable=["n4_3", "n3_3"]))
     ids = cids(enumerate_candidates(f, MAP_NODE))
@@ -220,6 +235,16 @@ def test_rest_site_default_two_options():
     raw["screen_state"] = {"rest_options": ["Rest", "Smith"]}
     f = fair(raw)
     assert cids(enumerate_candidates(f, REST_SITE)) == [A.REST_HEAL, A.REST_SMITH]
+
+
+def test_rest_site_after_choice_offers_proceed():
+    raw = combat_observation()
+    raw["screen"] = "REST"
+    raw["in_combat"] = False
+    raw["combat"] = None
+    raw["screen_state"] = {"options": ["Proceed"], "rest_options": []}
+    f = fair(raw)
+    assert cids(enumerate_candidates(f, REST_SITE)) == ["proceed"]
 
 
 def test_event_option_candidates():

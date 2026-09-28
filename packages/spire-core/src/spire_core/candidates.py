@@ -196,6 +196,18 @@ def enumerate_candidates(
 
     elif decision_point in (SELECT_CARD_MUST_K, SELECT_CARD_ANY):
         cands = [c for c in _card_select_candidates(fair) if c.cid not in picked]
+        # A confirmation/optional selection screen can legitimately contain no
+        # cards. Submit the empty selection so the game can consume its confirm
+        # button; otherwise the pipeline raises NoCandidates and waits for the
+        # watchdog forever.
+        if not cands and decision_point == SELECT_CARD_ANY and fair.screen_state.min_select == 0:
+            cands = [
+                Candidate(
+                    cid=A.EMPTY_SELECTION,
+                    description="Select no cards and confirm.",
+                    action=A.select_cards([]),
+                )
+            ]
 
     elif decision_point == MAP_NODE:
         by_id = {n.id: n for n in (fair.map.nodes if fair.map else ())}
@@ -250,6 +262,7 @@ def enumerate_candidates(
                 action=A.Action(A.KIND_SELECT_CHOICE, {"index": i}),
             )
             for i, text in enumerate(fair.screen_state.options)
+            if not text.startswith("[disabled]")
         ]
 
     elif decision_point == SHOP:
@@ -277,24 +290,33 @@ def enumerate_candidates(
         # rest_options 是游戏给出的按钮文本（"Rest" / "Smith"）。Fusion Hammer
         # 之类的遗物会让某个按钮根本不出现，所以候选必须**按实际选项**生成，
         # 并沿用选项在界面里的下标（mod 执行时用 index 点选项）。
-        opts = fair.screen_state.rest_options or ("Rest", "Smith")
-        lowered = [o.lower() for o in opts]
-        spec = (
-            (("rest", "heal"), A.REST_HEAL, "Rest (heal)"),
-            (("smith", "upgrade"), A.REST_SMITH, "Smith (upgrade a card)"),
-        )
-        cands = []
-        for keys, cid, label in spec:
-            for i, opt in enumerate(lowered):
-                if any(k in opt for k in keys):
-                    cands.append(
-                        Candidate(
-                            cid=cid,
-                            description=f"{label}.",
-                            action=A.Action(A.KIND_SELECT_CHOICE, {"index": i}),
+        opts = fair.screen_state.rest_options
+        if not opts and fair.screen_state.options:
+            cands = [
+                Candidate(
+                    cid=A.PROCEED,
+                    description="Continue from the completed campfire.",
+                    action=A.Action(A.KIND_PROCEED, {}),
+                )
+            ]
+        else:
+            lowered = [o.lower() for o in opts]
+            spec = (
+                (("rest", "heal"), A.REST_HEAL, "Rest (heal)"),
+                (("smith", "upgrade"), A.REST_SMITH, "Smith (upgrade a card)"),
+            )
+            cands = []
+            for keys, cid, label in spec:
+                for i, opt in enumerate(lowered):
+                    if any(k in opt for k in keys):
+                        cands.append(
+                            Candidate(
+                                cid=cid,
+                                description=f"{label}.",
+                                action=A.Action(A.KIND_SELECT_CHOICE, {"index": i}),
+                            )
                         )
-                    )
-                    break
+                        break
 
     elif decision_point == NEOW_BONUS:
         cands = [

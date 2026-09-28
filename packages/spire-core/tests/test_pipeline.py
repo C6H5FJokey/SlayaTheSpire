@@ -9,6 +9,7 @@ from fixtures import combat_observation, grid_observation, map_observation
 from spire_core import actions as A
 from spire_core import fairness, pipeline
 from spire_core.decision import COMBAT_PLAY, MAP_NODE, SELECT_CARD_ANY
+from spire_core.pipeline import RunOver
 from spire_core.model import RawObservation
 from spire_core.types import LayaResult
 
@@ -37,6 +38,17 @@ def test_plan_lists_candidates_as_criteria_in_order():
     criteria = list(plan.questions["q_action"]["criteria"].keys())
     assert criteria == plan.candidate_ids
     assert plan.state["mode"] == "combat"
+
+
+def test_committed_campfire_transition_needs_no_plan():
+    raw = combat_observation()
+    raw["screen"] = "REST"
+    raw["in_combat"] = False
+    raw["combat"] = None
+    raw["screen_state"] = {"rest_options": []}
+
+    with pytest.raises(RunOver):
+        pipeline.make_plan(fair(raw))
 
 
 def test_resolve_choice_produces_action():

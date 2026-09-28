@@ -87,6 +87,10 @@ def test_event_shop_rest_neow_boss_relic():
     assert identify(fair(with_screen(base, "EVENT", options=["x"]))) == EVENT_OPTION
     assert identify(fair(with_screen(base, "SHOP_ROOM"))) == SHOP
     assert identify(fair(with_screen(base, "REST", rest_options=["Rest"]))) == REST_SITE
+    assert identify(fair(with_screen(base, "REST", rest_options=[]))) == RUN_OVER
+    assert identify(fair(with_screen(
+        base, "REST", options=["Proceed"], rest_options=[]
+    ))) == REST_SITE
     assert identify(fair(with_screen(base, "NEOW", neow_options=["a"]))) == NEOW_BONUS
     assert identify(fair(with_screen(base, "BOSS_RELIC",
                                      reward_relics=[{"id": "Sozu"}]))) == RELIC_SELECT

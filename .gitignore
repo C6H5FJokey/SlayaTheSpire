@@ -36,3 +36,11 @@ mod/build/
 # 运行时产物
 *.log
 human_action.txt
+
+# 微调产物（训练项 / checkpoint / 续跑点 / torch 存盘不入库；脚本必须入库）
+finetune/out/
+finetune/checkpoints/
+*.pt
+
+# pytest 缓存目录（权限异常时会在仓库根留下 pytest-cache-files-*）
+pytest-cache-files-*/

@@ -24,6 +24,7 @@ import com.megacrit.cardcrawl.powers.AbstractPower;
 import com.megacrit.cardcrawl.relics.AbstractRelic;
 import com.megacrit.cardcrawl.rewards.RewardItem;
 import com.megacrit.cardcrawl.rooms.AbstractRoom;
+import com.megacrit.cardcrawl.rooms.CampfireUI;
 import com.megacrit.cardcrawl.rooms.EventRoom;
 import com.megacrit.cardcrawl.rooms.MonsterRoom;
 import com.megacrit.cardcrawl.rooms.MonsterRoomBoss;
@@ -60,6 +61,9 @@ public final class Observer {
     public static final String SCREEN_BOSS_RELIC = "BOSS_RELIC";
     public static final String SCREEN_NEOW = "NEOW";
     public static final String SCREEN_GAME_OVER = "GAME_OVER";
+
+    private static final String SPECIAL_MATCH = "gremlin_match";
+    private static final String SPECIAL_WHEEL = "gremlin_wheel";
 
     private Observer() {
     }
@@ -1179,6 +1183,9 @@ public final class Observer {
      * 下标），被禁用的选项加 `[disabled] ` 前缀，让模型能看见但不会选。
      */
     private static void eventState(Map<String, Object> out) {
+        if (specialEventState(out)) {
+            return;
+        }
         List<LargeDialogOptionButton> buttons = optionButtons();
         // 界面按钮文本是**界面语言**的（中文客户端就是中文），这里尽量换成英文。
         List<String> eng = englishOptions(buttons);
@@ -1193,6 +1200,101 @@ public final class Observer {
             out.put("neow_options", options);
         }
         addEventContext(out);
+    }
+
+    /** Controls for the two shrine events are drawn by the event itself. */
+    private static boolean specialEventState(Map<String, Object> out) {
+        String kind = specialEventKind();
+        if (SPECIAL_WHEEL.equals(kind)) {
+            List<Object> options = new ArrayList<Object>();
+            boolean queued = Boolean.TRUE.equals(Reflect.get(
+                    currentEvent(), currentEventClass(), "buttonPressed"));
+            options.add(queued ? "[disabled] Wheel is spinning" : "Spin the wheel");
+            out.put("options", options);
+            out.put("option_ids", options);
+            out.put("event_special", SPECIAL_WHEEL);
+            addEventContext(out);
+            return true;
+        }
+        if (SPECIAL_MATCH.equals(kind)) {
+            List<Object> options = new ArrayList<Object>();
+            List<AbstractCard> cards = specialEventCards();
+            for (int i = 0; i < cards.size(); i++) {
+                AbstractCard card = cards.get(i);
+                options.add(card != null && !card.isFlipped
+                        ? "[disabled] Card " + i + ": " + cardName(card)
+                        : "Flip card " + i);
+            }
+            out.put("options", options);
+            out.put("option_ids", options);
+            out.put("event_special", SPECIAL_MATCH);
+            addEventContext(out);
+            return true;
+        }
+        return false;
+    }
+
+    private static AbstractEvent currentEvent() {
+        AbstractRoom room = AbstractDungeon.getCurrRoom();
+        return room == null ? null : room.event;
+    }
+
+    private static Class<?> currentEventClass() {
+        AbstractEvent event = currentEvent();
+        return event == null ? AbstractEvent.class : event.getClass();
+    }
+
+    /** Return a special control kind, or an empty string for ordinary dialogs. */
+    public static String specialEventKind() {
+        try {
+            AbstractRoom room = AbstractDungeon.getCurrRoom();
+            AbstractEvent event = room == null ? null : room.event;
+            if (event == null) {
+                return "";
+            }
+            String name = event.getClass().getSimpleName();
+            Object screen = Reflect.get(event, event.getClass(), "screen");
+            String state = screen == null ? "" : String.valueOf(screen);
+            if ("GremlinMatchGame".equals(name) && "PLAY".equals(state)) {
+                return SPECIAL_MATCH;
+            }
+            if ("GremlinWheelGame".equals(name) && "SPIN".equals(state)) {
+                return SPECIAL_WHEEL;
+            }
+        } catch (RuntimeException e) {
+            // Unknown event versions fall back to their regular dialog buttons.
+        }
+        return "";
+    }
+
+    /** Live ordered cards inside GremlinMatchGame. */
+    public static List<AbstractCard> specialEventCards() {
+        List<AbstractCard> out = new ArrayList<AbstractCard>();
+        try {
+            AbstractRoom room = AbstractDungeon.getCurrRoom();
+            AbstractEvent event = room == null ? null : room.event;
+            if (event == null || !SPECIAL_MATCH.equals(specialEventKind())) {
+                return out;
+            }
+            Object group = Reflect.get(event, event.getClass(), "cards");
+            if (!(group instanceof CardGroup)) {
+                return out;
+            }
+            CardGroup cards = (CardGroup) group;
+            if (cards.group != null) {
+                out.addAll(cards.group);
+            }
+        } catch (RuntimeException e) {
+            // Observation can still be emitted with an empty special control list.
+        }
+        return out;
+    }
+
+    public static int specialEventOptionCount() {
+        if (SPECIAL_MATCH.equals(specialEventKind())) {
+            return specialEventCards().size();
+        }
+        return SPECIAL_WHEEL.equals(specialEventKind()) ? 1 : 0;
     }
 
     /**
@@ -1359,6 +1461,13 @@ public final class Observer {
         for (CampfireSlots.Slot s : CampfireSlots.list()) {
             names.add(s.name);
             labels.add(campfireLabel(s.name));
+        }
+        // After a campfire option is consumed, the room stays a REST room until
+        // the overlay Proceed button is clicked. Expose that real next action
+        // instead of making the agent wait for the watchdog.
+        if (labels.isEmpty() && CampfireUI.hidden) {
+            names.add("proceed");
+            labels.add("Proceed");
         }
         out.put("options", labels);
         out.put("option_ids", names);
@@ -1645,6 +1754,13 @@ public final class Observer {
                     .append(size(ss.get("reward_cards"))).append('/')
                     .append(size(ss.get("reward_relics"))).append('/')
                     .append(size(ss.get("shop_items")));
+            String special = specialEventKind();
+            sb.append('~').append(special);
+            if (SPECIAL_MATCH.equals(special)) {
+                for (AbstractCard c : specialEventCards()) {
+                    sb.append(c == null ? '-' : (c.isFlipped ? '0' : '1'));
+                }
+            }
         } catch (RuntimeException e) {
             sb.append("~err");
         }

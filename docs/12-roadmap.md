@@ -36,17 +36,20 @@ v1 之后的扩展方向。每条都标注了**已经预留的接口**，说明�
 
 **已预留**：`dataset/*.jsonl` 直接就是 `(state, questions) -> answer` 三元组，无需重建。
 
+**状态**：脚本已落地（`finetune/`，Windows 一条龙 `tools\finetune_laya.ps1`），参数与产物契约见
+[13-finetune](13-finetune.md)。下面这段保留为**决策依据**（为什么这么切）。
+
 **流程**：
 
 1. **采集**：`observe_human` 模式跑足够多的人类对局（强标签）；`agent` 模式跑自博弈（弱标签，配合 `outcome` 用）。
 2. **清洗**：`export.py --verify` 保证确定性；按 `match_rate` 排查候选枚举缺口；按 `by_decision_point` 排查采集偏斜（例如商店样本过少就专门多跑几局）。
 3. **切分**：按 run 切分（已内建），train/val/test 不共享任何一局。
-4. **训练**：加载官方 checkpoint（`laya-typed-decisions` 或 `english`）作为起点，按 Laya 官方的微调接口训练。**具体训练格式以实现时 Laya 仓库的 finetune 文档为准**（本仓库只负责产出兼容数据，不硬编码训练细节）。
+4. **训练**：加载官方 checkpoint（`english`）作为起点，按 Laya 官方的 **RLCD** 配方训练（GRPO 式策略梯度 + soft CE）；训练**前**留出校准片、训练**后**按 `(题型, 候选数档)` 拟合温度。数据量小时 `--freeze-encoder` 只训决策头。实现见 [13-finetune](13-finetune.md)。
 5. **评测**：
-   - 离线：留出集上的 answer accuracy、校准（`answer_confidence` 与正确率是否吻合）、延迟；
+   - 离线（`finetune/eval.py`）：留出集上的 accuracy、NLL/Brier、校准（ECE(`answer_confidence`)）、延迟；
    - 在线：用 `observe_human.also_query_model = true` 得到的 `agreement_rate` 作为主指标——**"模型与人类一致率"比"胜率"噪声小得多，适合快速迭代**；
    - 最后才看胜率（需要固定种子成组对比）。
-6. **上线**：微调后的 checkpoint 通过 `laya.model` 指定的路径加载（Laya 支持 `model_id_or_path`），逐局对比。
+6. **上线**：微调产物是一份普通 Laya checkpoint；`laya-serve` 的 Router 只认内置名，所以用 `finetune/serve.py` 起服务，agent 侧改 `[laya] model` 即可，逐局对比。
 
 **注意**：`post_sl` 房间与 `agent_fallback` 行默认排除——它们要么标签被污染，要么根本没有模型参与。
 

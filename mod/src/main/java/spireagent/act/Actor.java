@@ -11,6 +11,8 @@ import com.megacrit.cardcrawl.cards.CardQueueItem;
 import com.megacrit.cardcrawl.characters.AbstractPlayer;
 import com.megacrit.cardcrawl.core.AbstractCreature;
 import com.megacrit.cardcrawl.dungeons.AbstractDungeon;
+import com.megacrit.cardcrawl.events.AbstractEvent;
+import com.megacrit.cardcrawl.helpers.input.InputHelper;
 import com.megacrit.cardcrawl.map.MapEdge;
 import com.megacrit.cardcrawl.map.MapRoomNode;
 import com.megacrit.cardcrawl.monsters.AbstractMonster;
@@ -44,11 +46,11 @@ import spireagent.proto.Errors;
  * 语义动作执行（见 docs/03-mod-protocol.md#语义动作白名单）。
  *
  * 三条纪律：
- *   1. **不模拟鼠标**：一律走游戏自己的 `GameAction` / 动作队列 / 界面对象，
- *      因为坐标会随分辨率、语言、遗物数量漂移；
- *   2. **不猜**：任何取不到的对象都返回失败而不是抛异常，agent 侧据此重试或兜底；
- *   3. **同源**：所有"下标"都复用 `Observer` / `ShopSlots` / `CampfireSlots`
- *      的定义，绝不在这里重新数一遍 —— 否则模型选的和实际发生会错位。
+ * 1. **不模拟鼠标**：一律走游戏自己的 `GameAction` / 动作队列 / 界面对象，
+ * 因为坐标会随分辨率、语言、遗物数量漂移；
+ * 2. **不猜**：任何取不到的对象都返回失败而不是抛异常，agent 侧据此重试或兜底；
+ * 3. **同源**：所有"下标"都复用 `Observer` / `ShopSlots` / `CampfireSlots`
+ * 的定义，绝不在这里重新数一遍 —— 否则模型选的和实际发生会错位。
  *
  * 有些动作（确认按钮、点地图节点、点继续）游戏要等下一帧 `update()` 才真正生效，
  * 所以 `SpireAgentMod` 用 `EchoGate` 挡住这中间的空档（见 obs/EchoGate.java）。
@@ -61,7 +63,8 @@ public final class Actor {
     /** 执行一个已通过 `ActionSpec.validate` 的动作。 */
     public static Map<String, Object> execute(String kind, Map<String, Object> args) {
         Map<String, Object> a = args == null
-                ? new LinkedHashMap<String, Object>() : args;
+                ? new LinkedHashMap<String, Object>()
+                : args;
         try {
             if (ActionSpec.PLAY_CARD.equals(kind)) {
                 return playCard(a);
@@ -136,18 +139,23 @@ public final class Actor {
         if (p == null) {
             return Errors.fail(Errors.SCREEN_MISMATCH, "not in combat");
         }
-        // 只置 endTurnQueued —— 这是"结束回合"按钮按下去之后游戏自己做的唯一一件事
-        // （EndTurnButton.disable(true) 也只做这一件，外加音效和按钮文案）。
+        // 必须走游戏自己的按钮入口，而不是只写 endTurnQueued：按钮入口除了设置
+        // endTurnQueued，还会立即把按钮置灰、把文案改成 "Enemy Turn"、释放当前选牌，
+        // 并排入 NewQueueCardAction。只写字段会让按钮仍显示 "End Turn" 且可再次点击，
+        // 这正是 agent 结束回合后用户看到的症状。
         //
-        // 真正的闸门在 AbstractPlayer.updateInput()：它要等到 cardQueue 清空、且 actionManager
-        // 交还控制权（!hasControl）之后，才把 endTurnQueued 换成 isEndingTurn。而 AbstractRoom.update()
-        // 只要看到 isEndingTurn 为真，下一帧就把整套 EndTurnAction + WaitAction +
-        // MonsterStartTurnAction 排进队列（AbstractRoom$1）。
-        //
-        // 顺手把 isEndingTurn 也置真就等于绕过那道闸门：出牌还没结算完，敌人回合就已经排进去了
-        // （回合结束效果错序甚至丢失）；而且 endTurnQueued 没走 updateInput 的分支、会一直留在 true，
-        // 等控制权回来时再触发一次 —— 表现就是"连续弹出两次敌人回合"。
-        p.endTurnQueued = true;
+        // EndTurnButton.disable(true) 不会直接设置 isEndingTurn；真正的闸门仍在
+        // AbstractPlayer.updateInput()：等 cardQueue 清空且 actionManager 交还控制权
+        // （!hasControl）后，才把 endTurnQueued 换成 isEndingTurn。AbstractRoom.update()
+        // 随后才排 EndTurnAction + WaitAction + MonsterStartTurnAction，回合结束效果
+        // 因而保持游戏原本的顺序，不会再重复触发敌人回合。
+        if (AbstractDungeon.overlayMenu == null || AbstractDungeon.overlayMenu.endTurnButton == null) {
+            return Errors.fail(Errors.SCREEN_MISMATCH, "end-turn button is unavailable");
+        }
+        if (p.endTurnQueued || p.isEndingTurn) {
+            return Errors.fail(Errors.ILLEGAL_ACTION, "turn end is already queued");
+        }
+        AbstractDungeon.overlayMenu.endTurnButton.disable(true);
         return Errors.ok();
     }
 
@@ -200,6 +208,16 @@ public final class Actor {
         }
         int index = Json.asInt(args.get("index"), Integer.MIN_VALUE);
         String screen = Observer.screenName();
+
+        if (Observer.SCREEN_EVENT.equals(screen)) {
+            String special = Observer.specialEventKind();
+            if ("gremlin_match".equals(special)) {
+                return matchCard(index);
+            }
+            if ("gremlin_wheel".equals(special)) {
+                return spinWheel(index);
+            }
+        }
 
         if (Observer.SCREEN_SHOP.equals(screen)) {
             return shopChoice(index);
@@ -301,8 +319,8 @@ public final class Actor {
         }
         if (slot.payload instanceof AbstractCard) {
             Object ok = Reflect.call(AbstractDungeon.shopScreen, ShopScreen.class,
-                    "purchaseCard", new Class<?>[] {AbstractCard.class},
-                    new Object[] {slot.payload});
+                    "purchaseCard", new Class<?>[] { AbstractCard.class },
+                    new Object[] { slot.payload });
             return ok == null
                     ? Errors.fail(Errors.INTERNAL, "purchaseCard failed")
                     : Errors.ok();
@@ -317,12 +335,12 @@ public final class Actor {
      * 那是个 static 的"结账"动作：扣金币、把 `purgeCost` 再抬 25、播音效 ——
      * 它**不打开选牌界面**。真正的"开始删牌"入口是 private 的 `purchasePurge()`：
      *
-     *     if (player.gold >= actualPurgeCost) {
-     *         previousScreen = SHOP;                      // 选完要回到商店
-     *         gridSelectScreen.open(getGroupWithoutBottledCards(
-     *                 masterDeck.getPurgeableCards()), 1, NAMES[13],
-     *                 false, false, forPurge=true, true);
-     *     } else { playCantBuySfx(); }
+     * if (player.gold >= actualPurgeCost) {
+     * previousScreen = SHOP; // 选完要回到商店
+     * gridSelectScreen.open(getGroupWithoutBottledCards(
+     * masterDeck.getPurgeableCards()), 1, NAMES[13],
+     * false, false, forPurge=true, true);
+     * } else { playCantBuySfx(); }
      *
      * 结账由游戏自己完成：`ShopRoom.updatePurge()` 每帧检查
      * `!gridSelectScreen.selectedCards.isEmpty()`，非空就调 `purgeCard()` 扣钱、
@@ -343,8 +361,7 @@ public final class Actor {
                     "not enough gold to purge (" + p.gold + " < "
                             + ShopScreen.actualPurgeCost + ")");
         }
-        CardGroup purgeable =
-                CardGroup.getGroupWithoutBottledCards(p.masterDeck.getPurgeableCards());
+        CardGroup purgeable = CardGroup.getGroupWithoutBottledCards(p.masterDeck.getPurgeableCards());
         if (purgeable == null || purgeable.size() == 0) {
             return Errors.fail(Errors.ILLEGAL_ACTION, "no purgeable cards in the deck");
         }
@@ -355,6 +372,13 @@ public final class Actor {
     }
 
     private static Map<String, Object> restChoice(int index) {
+        AbstractRoom currentRoom = AbstractDungeon.getCurrRoom();
+        if (currentRoom instanceof RestRoom) {
+            CampfireUI ui = ((RestRoom) currentRoom).campfireUI;
+            if (ui != null && (ui.somethingSelected || CampfireUI.hidden)) {
+                return Errors.fail(Errors.ILLEGAL_ACTION, "campfire choice is already committed");
+            }
+        }
         List<CampfireSlots.Slot> slots = CampfireSlots.list();
         if (index < 0 || index >= slots.size()) {
             return Errors.fail(Errors.INDEX_RANGE,
@@ -368,26 +392,100 @@ public final class Actor {
         // 光调 `useOption()` 是不够的：游戏自己的鼠标路径在
         // `AbstractCampfireOption.update()` 里做**两件事**：
         //
-        //     if (this.hb.clicked || (controllerSelect && hovered)) {
-        //         this.hb.clicked = false;
-        //         if (!Settings.isTouchScreen) {
-        //             this.useOption();
-        //             ((RestRoom)getCurrRoom()).campfireUI.somethingSelected = true;
-        //         }
-        //     }
+        // if (this.hb.clicked || (controllerSelect && hovered)) {
+        // this.hb.clicked = false;
+        // if (!Settings.isTouchScreen) {
+        // this.useOption();
+        // ((RestRoom)getCurrRoom()).campfireUI.somethingSelected = true;
+        // }
+        // }
         //
         // `somethingSelected` 才是"这个界面已经选过了"的旗标：`CampfireUI.update()`
         // 只有看到它才会去减 `hideStuffTimer` 并把 `hidden` 置真，之后按钮才不再更新。
         // 早先只调 `useOption()`，于是界面永远不隐藏、按钮永远可点 —— agent 拿到
         // 的还是 REST 界面，就会**反复选同一个选项**（真机症状：同一个休息连点好几次）。
         // 这里照抄非触屏分支的两步，且不复位 `used`，语义与鼠标点击完全一致。
+
+        Log.info("[DBG-CAMPFIRE] before useOption"
+                + " index=" + index
+                + " option=" + option.getClass().getName()
+                + " room=" + AbstractDungeon.getCurrRoom().getClass().getName()
+                + " phase=" + AbstractDungeon.getCurrRoom().phase
+                + " dungeonScreen=" + AbstractDungeon.screen
+                + " isScreenUp=" + AbstractDungeon.isScreenUp
+                + " previousScreen=" + AbstractDungeon.previousScreen);
+
         option.useOption();
+
         AbstractRoom room = AbstractDungeon.getCurrRoom();
         if (room instanceof RestRoom) {
             CampfireUI ui = ((RestRoom) room).campfireUI;
+
+            Log.info("[DBG-CAMPFIRE] after useOption"
+                    + " selected=" + ui.somethingSelected
+                    + " hidden=" + CampfireUI.hidden
+                    + " hideTimer=" + Reflect.get(ui, CampfireUI.class, "hideStuffTimer")
+                    + " buttons=" + Reflect.get(ui, CampfireUI.class, "buttons"));
+
             if (ui != null) {
                 ui.somethingSelected = true;
             }
+        }
+        return Errors.ok();
+    }
+
+    /** Flip one card through GremlinMatchGame's own match logic. */
+    private static Map<String, Object> matchCard(int index) {
+        List<AbstractCard> cards = Observer.specialEventCards();
+        if (index < 0 || index >= cards.size()) {
+            return Errors.fail(Errors.INDEX_RANGE,
+                    "match card index " + index + " out of range [0," + cards.size() + ")");
+        }
+        AbstractCard card = cards.get(index);
+        if (card == null || !card.isFlipped) {
+            return Errors.fail(Errors.ILLEGAL_ACTION, "match card is already face up");
+        }
+        AbstractRoom room = AbstractDungeon.getCurrRoom();
+        AbstractEvent event = room == null ? null : room.event;
+        if (event == null || card.hb == null) {
+            return Errors.fail(Errors.SCREEN_MISMATCH, "match game is unavailable");
+        }
+        int oldX = InputHelper.mX;
+        int oldY = InputHelper.mY;
+        try {
+            // Use the original handler so matching, attempts, timers, and rewards
+            // remain exactly the same as a human click.
+            InputHelper.mX = Math.round(card.hb.cX);
+            InputHelper.mY = Math.round(card.hb.cY);
+            InputHelper.justClickedLeft = true;
+            Reflect.call(event, event.getClass(), "updateMatchGameLogic",
+                    new Class<?>[0], new Object[0]);
+            if (card.isFlipped) {
+                return Errors.fail(Errors.INTERNAL, "match card click was not accepted");
+            }
+            return Errors.ok();
+        } finally {
+            InputHelper.justClickedLeft = false;
+            InputHelper.mX = oldX;
+            InputHelper.mY = oldY;
+        }
+    }
+
+    /** Press GremlinWheelGame's visible Spin button; its update owns the spin. */
+    private static Map<String, Object> spinWheel(int index) {
+        if (index != 0) {
+            return Errors.fail(Errors.INDEX_RANGE, "wheel has one spin button");
+        }
+        AbstractRoom room = AbstractDungeon.getCurrRoom();
+        AbstractEvent event = room == null ? null : room.event;
+        if (event == null) {
+            return Errors.fail(Errors.SCREEN_MISMATCH, "wheel event is unavailable");
+        }
+        if (Boolean.TRUE.equals(Reflect.get(event, event.getClass(), "buttonPressed"))) {
+            return Errors.fail(Errors.ILLEGAL_ACTION, "wheel spin is already queued");
+        }
+        if (!Reflect.set(event, event.getClass(), "buttonPressed", Boolean.TRUE)) {
+            return Errors.fail(Errors.INTERNAL, "wheel spin button is unavailable");
         }
         return Errors.ok();
     }
@@ -436,12 +534,12 @@ public final class Actor {
      * **只置 `isDone = true`，剩下的全交给游戏自己**。`CombatRewardScreen.update()`
      * 每帧会跑 `rewardViewUpdate()`：
      *
-     *     item.update();
-     *     if (item.isDone) {
-     *         if (item.claimReward()) { it.remove(); changed = true; }
-     *         else if (item.type == POTION) { item.isDone = false; flashRed(); tip(...); }
-     *         else { item.isDone = false; }        // CARD：开卡牌界面，条目留在列表里
-     *     }
+     * item.update();
+     * if (item.isDone) {
+     * if (item.claimReward()) { it.remove(); changed = true; }
+     * else if (item.type == POTION) { item.isDone = false; flashRed(); tip(...); }
+     * else { item.isDone = false; } // CARD：开卡牌界面，条目留在列表里
+     * }
      *
      * 也就是说 `claimReward()` 的返回值**不是成功/失败**：卡牌奖励故意返回 false
      * （它只是打开三选一界面，条目要等 `CardRewardScreen.takeReward()` 才移走）。
@@ -469,12 +567,13 @@ public final class Actor {
      *
      * 也不走反射调 `CardRewardScreen.acquireCard`（实测 `getDeclaredMethod` 拿不到，
      * 静默返回 null）。改成**照抄游戏那两个私有方法的公开等价物**：
-     *   - `acquireCard(card)` = `effectsQueue.add(new FastCardObtainEffect(card, x, y))`
-     *     （`FastCardObtainEffect` 是 public，这才是"牌真的进牌组"的那一步）；
-     *   - `takeReward()` = 从**界面自己的** rewards 里 remove 这条 + `positionRewards()`，
-     *     空了就 `hasTakenAll = true` + 亮出 Proceed（全是 public 字段 / public 方法）；
-     *   - 然后 `closeCurrentScreen()`：`CARD_REWARD` 的 previousScreen 是
-     *     `COMBAT_REWARD`（`RewardItem.claimReward()` 里设的），会自动退回去。
+     * - `acquireCard(card)` = `effectsQueue.add(new FastCardObtainEffect(card, x,
+     * y))`
+     * （`FastCardObtainEffect` 是 public，这才是"牌真的进牌组"的那一步）；
+     * - `takeReward()` = 从**界面自己的** rewards 里 remove 这条 + `positionRewards()`，
+     * 空了就 `hasTakenAll = true` + 亮出 Proceed（全是 public 字段 / public 方法）；
+     * - 然后 `closeCurrentScreen()`：`CARD_REWARD` 的 previousScreen 是
+     * `COMBAT_REWARD`（`RewardItem.claimReward()` 里设的），会自动退回去。
      */
     private static Map<String, Object> cardReward(int index) {
         CardRewardScreen crs = AbstractDungeon.cardRewardScreen;
@@ -611,6 +710,13 @@ public final class Actor {
         }
         List<AbstractCard> pool = selectionPool();
         if (pool.isEmpty()) {
+            GridCardSelectScreen gs = AbstractDungeon.gridSelectScreen;
+            if (AbstractDungeon.screen == AbstractDungeon.CurrentScreen.GRID
+                    && gs != null && (gs.anyNumber || gs.isJustForConfirming)) {
+                // Optional/confirmation grids may legitimately have no cards.
+                // Let the native confirm path close the screen and continue.
+                return commitGridSelect(new ArrayList<AbstractCard>());
+            }
             return Errors.fail(Errors.SCREEN_MISMATCH, "no card-selection screen");
         }
         List<AbstractCard> picks = new ArrayList<AbstractCard>();
@@ -700,7 +806,8 @@ public final class Actor {
      * 为什么不能只调 `closeCurrentScreen()`：事件（`UpgradeShrine` 等）与篝火锻造
      * （`CampfireSmithEffect`）都靠**轮询**拿结果：
      *
-     *     if (!AbstractDungeon.isScreenUp && !gridSelectScreen.selectedCards.isEmpty()) { ... }
+     * if (!AbstractDungeon.isScreenUp && !gridSelectScreen.selectedCards.isEmpty())
+     * { ... }
      *
      * 而 `closeCurrentScreen()` 只在 `previousScreen == null`（且玩家没死）时
      * 才经 `genericScreenOverlayReset()` 把 `isScreenUp` 置假；`previousScreen`

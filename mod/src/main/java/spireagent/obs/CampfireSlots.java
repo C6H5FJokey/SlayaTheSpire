@@ -42,6 +42,10 @@ public final class CampfireSlots {
         if (ui == null) {
             return out;
         }
+        // Do not expose buttons while the campfire is consuming the choice.
+        if (ui.somethingSelected || CampfireUI.hidden) {
+            return out;
+        }
         List<?> buttons = Reflect.get(ui, CampfireUI.class, "buttons") instanceof List
                 ? (List<?>) Reflect.get(ui, CampfireUI.class, "buttons")
                 : new ArrayList<Object>();

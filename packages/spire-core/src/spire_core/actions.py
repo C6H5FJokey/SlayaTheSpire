@@ -56,6 +56,8 @@ P_CHOICE = "choice"
 END_TURN = "end_turn"
 SKIP = "skip"
 LEAVE = "leave"
+PROCEED = "proceed"
+EMPTY_SELECTION = "select:none"
 REST_HEAL = "rest:heal"
 REST_SMITH = "rest:smith"
 
@@ -162,6 +164,8 @@ def parse_candidate(cid: str) -> Action:
         return Action(KIND_SELECT_CARD_REWARD, {"index": -1})
     if cid == LEAVE:
         return Action(KIND_SELECT_CHOICE, {"index": -1})
+    if cid == PROCEED:
+        return Action(KIND_PROCEED, {})
     if cid == REST_HEAL:
         return Action(KIND_SELECT_CHOICE, {"index": 0})
     if cid == REST_SMITH:
@@ -281,6 +285,8 @@ __all__ = [
     "P_REST",
     "P_REWARD",
     "P_TARGET",
+    "PROCEED",
+    "EMPTY_SELECTION",
     "REST_HEAL",
     "REST_SMITH",
     "SKIP",

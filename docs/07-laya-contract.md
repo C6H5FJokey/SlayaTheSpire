@@ -105,6 +105,11 @@ prefer_multilingual_over_chars = 6000
 
 选择规则：若 `model` 显式配置则直接用；若为空，则由 `Router` 自动选。**不要**在请求里塞 `convaiinnovations/laya`（那等价于"让 Router 选"）。
 
+> **本项目的取值**：`state` 单独就已有 **99% 超过 512 token**（中位数 1725），所以微调与部署统一按
+> `max_len = 2048` 走（见 [13-finetune](13-finetune.md)）。`english` 自带的部署配置是
+> `max_len=512` / `head_max_len=192`，微调时提到 2048 / 320 并在该长度上适配（ModernBERT 的
+> `max_position_embeddings` 本来就是 8192）；也可以直接切 `multilingual` / `typed-decisions`（自带 1024）。
+
 ## 缓存
 
 键：`sha256(fair_state_hash + questions_hash)`。命中则**直接复用上次的 `answers`**，不发网络请求。

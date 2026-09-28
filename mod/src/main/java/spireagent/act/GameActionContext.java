@@ -106,6 +106,10 @@ public final class GameActionContext implements ActionContext {
     public int optionCount() {
         String screen = Observer.screenName();
         if (Observer.SCREEN_EVENT.equals(screen) || Observer.SCREEN_NEOW.equals(screen)) {
+            if (Observer.SCREEN_EVENT.equals(screen)
+                    && Observer.specialEventOptionCount() > 0) {
+                return Observer.specialEventOptionCount();
+            }
             return Observer.optionButtons().size();
         }
         if (Observer.SCREEN_SHOP.equals(screen)) {

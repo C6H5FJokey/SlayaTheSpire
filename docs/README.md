@@ -18,6 +18,7 @@ SlayaTheSpire 的契约文档。**代码是文档的实现，文档是代码的�
 | 10 | [部署](10-deployment.md) | 运维 | 部署远程 Laya |
 | 11 | [测试与验收](11-testing.md) | 全体 | 提 PR / 验收 |
 | 12 | [路线图](12-roadmap.md) | 全体 | 规划下一步 |
+| 13 | [微调](13-finetune.md) | 数据/运维 | 训练、评测、部署微调后的 checkpoint |
 
 ## 术语
 
@@ -37,6 +38,7 @@ SlayaTheSpire 的契约文档。**代码是文档的实现，文档是代码的�
 ## 上游依赖
 
 - Laya：`pip install laya`，checkpoints `convaiinnovations/laya`、`laya-multilingual`、`laya-typed-decisions`。
+- Laya 微调 / 微调后部署：`finetune/`（`pip install "laya[serve]" pytest`，**训练与部署共用一个 venv**，见 [13-finetune](13-finetune.md)）。
 - ModTheSpire（Steam 工坊 `1605060445`）、BaseMod（`1605833019`）。
 - 参考实现：CommunicationMod（协议与状态 schema 的先例，本项目不依赖它运行）。
 
@@ -45,5 +47,7 @@ SlayaTheSpire 的契约文档。**代码是文档的实现，文档是代码的�
 - 阶段 0（本目录）已定稿；阶段 1-4 已落地：`spire-core` / `spire-agent` / 模组均有测试覆盖
   （`.\.venv\Scripts\python.exe -m pytest packages -q`、`powershell -File tools\test_mod.ps1`）。
 - 采集 -> 导出的完整链路可离线跑通：`python tools/demo_observe_session.py`。
-- 剩余工作（观战面板细化、远程部署脚本、端到端验收、微调）见 [12-roadmap](12-roadmap.md)
+- 微调链路（编译训练项 -> RLCD 微调 -> 离线评测 -> 用微调后的 checkpoint 起服务）已落地并可离线跑通：
+  `finetune/`（Windows 一条龙 `tools\finetune_laya.ps1`，Linux `finetune/run_all.sh`），契约见 [13-finetune](13-finetune.md)。
+- 剩余工作（观战面板细化、端到端验收）见 [12-roadmap](12-roadmap.md)
   与 [11-testing](11-testing.md) 的验收清单。

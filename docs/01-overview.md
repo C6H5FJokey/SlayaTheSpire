@@ -10,7 +10,7 @@
 
 - **全自动**：自动开新局，打到死亡或通关，自动重开下一局，全程无人工干预。
 - **严格公平**：模型只看到游戏内玩家可见的信息（见 [04-fairness](04-fairness.md)）。
-- **数据可用**：每次决策落盘成 `(state, questions, labels)` 训练行，可直接用于 Laya 微调（见 [08-dataset](08-dataset.md)）。
+- **数据可用**：每次决策落盘成 `(state, questions, labels)` 训练行，可直接用于 Laya 微调（数据契约见 [08-dataset](08-dataset.md)，微调脚本见 [13-finetune](13-finetune.md)）。
 - **可调试**：本地只读观战面板 + 结构化日志。
 
 ### 非目标（v1 不做）
@@ -18,7 +18,7 @@
 | 不做 | 原因 |
 |---|---|
 | OCR / 无模组通道 | 只预留 `ObservationSource` / `ActionSink` 抽象；见 [12-roadmap](12-roadmap.md) |
-| 在线微调 | v1 只产数据集 |
+| 在线微调 | 微调是**离线**的独立流程（见 [13-finetune](13-finetune.md)）；agent 跑局时不做任何权重更新 |
 | 并发多局、多实例 | 单实例串行，先跑通 |
 | TLS 终结 | 由部署方（反代 / 隧道）负责 |
 | SL（save-scum） | **默认禁止**，见 [08-dataset](08-dataset.md#sl-语义) |

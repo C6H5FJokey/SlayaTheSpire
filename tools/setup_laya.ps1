@@ -1,5 +1,5 @@
 ﻿<#
-  一次性环境：在仓库里建 .venv-laya，装「本机 Laya 服务」（CUDA torch + laya[serve]）。
+  一次性环境：在仓库里建 .venv-laya，装「本机 Laya 服务」（CUDA torch + laya[serve] + pytest）。
 
   为什么和 .venv 分开：agent 侧的 .venv 只需要 httpx；torch 的 CUDA 轮子约 2.5 GB，
   混在一起只会让 agent 的环境又大又慢。两边依赖互不相干，分开升级互不影响。
@@ -17,6 +17,7 @@
     powershell -File tools/setup_laya.ps1 -NoModel       # 只装包，不下模型
 
   模型落在仓库内 .cache\huggingface（已 gitignore）。起服务见 tools\serve_laya.ps1。
+  pytest 是给 finetune\tests 用的：**微调与部署共用这一个 venv**（见 docs\13-finetune.md）。
 #>
 [CmdletBinding()]
 param(
@@ -87,6 +88,10 @@ Invoke-Pip "torch==$Torch" '--index-url' "https://download.pytorch.org/whl/$Cuda
 
 Write-Host '[laya] laya[serve]' -ForegroundColor Cyan
 Invoke-Pip 'laya[serve]'
+
+# pytest 只给 finetune\tests 用；微调与部署共用这个 venv，装在这里省得两头版本对不上。
+Write-Host '[laya] pytest（跑 finetune\tests）' -ForegroundColor Cyan
+Invoke-Pip 'pytest'
 
 if (-not $NoModel) {
     $env:HF_HOME = Join-Path $root '.cache\huggingface'

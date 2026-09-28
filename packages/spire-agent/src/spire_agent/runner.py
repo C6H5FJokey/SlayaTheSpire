@@ -689,6 +689,8 @@ class AgentRunner:
         `select_card_any` 例外：它的"什么都不选"（空选）本身就是一个真实选项，
         一个候选不等于没有选择余地。
         """
+        if len(plan.candidates) == 1 and plan.candidates[0].cid == A.EMPTY_SELECTION:
+            return plan.candidates[0]
         if len(plan.candidates) != 1 or plan.decision_point in FORCED_EXEMPT:
             return None
         # 选牌界面要求必选 k 张时，"只有一个候选"是界面异常，不该由这里拍板。

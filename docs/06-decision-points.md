@@ -34,7 +34,7 @@ def identify(fair) -> DecisionPoint
 | 4 | `screen == COMBAT_REWARD` | `relic_select`（若有遗物）/ `card_reward`（若有卡牌）/ 否则 `proceed` |
 | 5 | `screen == EVENT` | `event_option` |
 | 6 | `screen == SHOP_ROOM` | `shop` |
-| 7 | `screen == REST` | `rest_site` |
+| 7 | `screen == REST` 且 `rest_options` 或完成后的 `options=["Proceed"]` 非空 | `rest_site` |
 | 8 | `screen == NEOW` | `neow_bonus` |
 | 9 | `screen == BOSS_RELIC` / 宝箱 | `relic_select` |
 | 10 | `in_combat` 且可操作 | `combat_play` |
@@ -57,7 +57,7 @@ def identify(fair) -> DecisionPoint
 | `relic_select` | `relic:<index>` | `relic:1` |
 | `event_option` | `option:<index>` | `option:2` |
 | `shop` | `buy:<index>` / `leave` | `buy:3`、`leave` |
-| `rest_site` | `rest:heal` / `rest:smith` | |
+| `rest_site` | `rest:heal` / `rest:smith` / `proceed` | 完成篝火后选择 `proceed` |
 | `neow_bonus` | `neow:<index>` | `neow:0` |
 | `generic_choice` | `choice:<index>` | `choice:0` |
 

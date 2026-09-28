@@ -90,6 +90,7 @@ python3 -m venv .venv-laya
 . .venv-laya/bin/activate
 pip install torch --index-url https://download.pytorch.org/whl/cu128
 pip install "laya[serve]"
+pip install pytest     # 这台机器还要跑微调 / 微调测试时（训练与部署共用一个 venv，见 13-finetune）
 ```
 
 checkpoint 第一次用到时会自动下到 `~/.cache/huggingface`。想提前拉全：
@@ -109,6 +110,30 @@ export LAYA_MODELS=english
 export LAYA_API_KEY="$(openssl rand -hex 24)"
 export LAYA_LOG_LEVEL=info
 laya-serve            # 等价于 python -m laya.serve
+```
+
+## 部署微调后的 checkpoint
+
+微调产物（`finetune/checkpoints/<name>/`）是一份普通 Laya checkpoint，但 `laya-serve` 的 Router
+**只认内置 checkpoint 名**，喂不进本地目录 —— 用仓库自带的 `finetune/serve.py` 起同一套
+`/v1/systemone`（HTTP 外壳、错误码、请求预算守卫都与 `laya.serve` 对齐）：
+
+```bash
+# 先自检（加载 checkpoint + 发一道最小题），再起服务
+python finetune/serve.py --model finetune/checkpoints/laya-spire-v1 --check
+LAYA_HOST=0.0.0.0 LAYA_API_KEY=<key> python finetune/serve.py --model finetune/checkpoints/laya-spire-v1
+```
+
+**训练与部署必须共用同一个 venv**（`.venv-laya`）：`serve.py` 的预算守卫、温度夹取、序列构造
+直接复用训练时那一份 `laya` 实现，版本一漂移，训练时看到的概率就不再是线上给的概率。
+参数与硬规则（只服务本地目录、非环回必须配 key）见 [13-finetune](13-finetune.md)。
+
+agent 侧只是把 `model` 换掉（`--name` / checkpoint 里的 `model_name` 要对得上）：
+
+```toml
+[laya]
+base_url = "http://10.0.0.12:8000"
+model    = "laya-spire"
 ```
 
 ## 环境变量

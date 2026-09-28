@@ -18,6 +18,8 @@ import com.megacrit.cardcrawl.core.CardCrawlGame;
 import com.megacrit.cardcrawl.dungeons.AbstractDungeon;
 import com.megacrit.cardcrawl.potions.AbstractPotion;
 import com.megacrit.cardcrawl.rooms.AbstractRoom;
+import com.megacrit.cardcrawl.rooms.RestRoom;
+import com.megacrit.cardcrawl.rooms.CampfireUI;
 
 import basemod.BaseMod;
 import basemod.interfaces.OnCardUseSubscriber;
@@ -43,9 +45,9 @@ import spireagent.proto.Errors;
  * 模组入口（见 docs/02-architecture.md、docs/03-mod-protocol.md）。
  *
  * 每帧只做三件事，顺序不能变：
- *   1. 看门狗：agent 连着却迟迟不发动作 -> 执行安全默认动作（游戏不卡死）；
- *   2. 回声门 + 去抖门：只有"轮到 agent 做决定"的新局面才发观测；
- *   3. 发观测并重新武装看门狗。
+ * 1. 看门狗：agent 连着却迟迟不发动作 -> 执行安全默认动作（游戏不卡死）；
+ * 2. 回声门 + 去抖门：只有"轮到 agent 做决定"的新局面才发观测；
+ * 3. 发观测并重新武装看门狗。
  *
  * **模组没有自己的模式。** `mode` 与 `watchdog_sec` 的唯一来源是 agent 在握手后
  * 发来的 `configure` 帧；在那之前模组是哑的（不发观测、不接管、不报人类动作）。
@@ -201,6 +203,32 @@ public final class SpireAgentMod implements
                 return;
             }
             emitObservation(now);
+
+            GameActionManager am = AbstractDungeon.actionManager;
+            AbstractRoom room = AbstractDungeon.getCurrRoom();
+            CampfireUI ui = room instanceof RestRoom
+                    ? ((RestRoom) room).campfireUI
+                    : null;
+
+            if (room instanceof RestRoom) {
+                Log.info("[DBG-CAMPFIRE-FRAME]"
+                        + " screenName=" + Observer.screenName()
+                        + " dungeonScreen=" + AbstractDungeon.screen
+                        + " phase=" + (room == null ? null : room.phase)
+                        + " selected=" + (ui == null ? null : ui.somethingSelected)
+                        + " hidden=" + CampfireUI.hidden
+                        + " hideTimer=" + (ui == null ? null
+                                : Reflect.get(ui, CampfireUI.class, "hideStuffTimer"))
+                        + " stable=" + Observer.stable()
+                        + " signature=" + Observer.signature()
+                        + " actionPhase=" + (am == null ? null : am.phase)
+                        + " actions=" + (am == null || am.actions == null ? -1 : am.actions.size())
+                        + " cardQueue=" + (am == null || am.cardQueue == null ? -1 : am.cardQueue.size())
+                        + " monsterQueue=" + (am == null || am.monsterQueue == null ? -1 : am.monsterQueue.size())
+                        + " currentAction=" + (am == null || am.currentAction == null
+                                ? "-"
+                                : am.currentAction.getClass().getName()));
+            }
         } catch (RuntimeException e) {
             Log.error("postUpdate failed", e);
         }
@@ -311,9 +339,9 @@ public final class SpireAgentMod implements
      * `turnHasEnded` 在非战斗房间里还是 true，下一帧就是硬崩：
      *
      * NullPointerException
-     *   at GameActionManager.getNextAction(GameActionManager.java:429)
-     *   at AbstractRoom.update(AbstractRoom.java:463)
-     *   at EventRoom.update(EventRoom.java:28)
+     * at GameActionManager.getNextAction(GameActionManager.java:429)
+     * at AbstractRoom.update(AbstractRoom.java:463)
+     * at EventRoom.update(EventRoom.java:28)
      *
      * 真机崩过一次（Upgrade Shrine，2026-09-28）。`turnHasEnded` 只在"玩家下一回合
      * 开始"那段里被复位，战斗若在敌人回合里结束就永远走不到那里 —— 标志漏进下一个

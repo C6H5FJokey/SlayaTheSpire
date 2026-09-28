@@ -7,6 +7,9 @@
 数据单元与 Laya 的可训单元严格对齐：`(英文 state, typed questions) -> answer`。
 采集的不是"游戏录像"，而是**每个决策点的完整构题现场 + 标签**。
 
+仓库同时自带**微调与微调后部署**的脚本（`finetune/`）：训练与部署**共用一个 venv**，
+契约见 [docs/13-finetune.md](docs/13-finetune.md)。
+
 ## 三段式架构
 
 ```
@@ -182,12 +185,35 @@ python -m spire_agent run --config spire.local.toml
 - `--expand-noul` 能把一行 `choice` 无损展开成 N 行 `noul`（选中 true、其余 false），
   免费得到均衡的二分类样本。
 
+## 微调（Laya）
+
+`dataset/` 是数据契约，`finetune/` 把它编译成 Laya 训练项、按官方 **RLCD** 配方微调、离线评测，
+最后用**同一个 venv**（`.venv-laya`）把微调后的 checkpoint 起成服务 —— agent 只改 `[laya] base_url`
+与 `model` 两个字段。完整参数、产物格式与已知坑见 [docs/13-finetune.md](docs/13-finetune.md)。
+
+```powershell
+# 一条龙：build -> train -> eval -> 打印部署命令（先按上一节导出 dataset/）
+powershell -File tools\finetune_laya.ps1
+powershell -File tools\finetune_laya.ps1 -TrainArgs --freeze-encoder   # 小数据量：只训决策头
+```
+
+```bash
+bash finetune/run_all.sh            # 远端 / Linux
+WORLD=2 bash finetune/run_all.sh    # 多卡（torchrun）
+```
+
+训练与部署**共用 `.venv-laya`**（`powershell -File tools\setup_laya.ps1` 建的）；checkpoint 缓存放
+仓库内 `.cache\huggingface`，默认离线，迁到远端只要拷目录。
+
 ## 测试
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest packages/spire-core/tests packages/spire-agent/tests -q
 powershell -File tools/test_mod.ps1     # 模组纯逻辑自检（无需游戏）
+.\.venv-laya\Scripts\python.exe -m pytest finetune\tests -q   # 微调链路（需要 .venv-laya）
 ```
+
+在仓库根直接跑 `pytest` 也行 —— `pytest.ini` 把 `testpaths` 限定成 `packages` 与 `finetune`。
 
 ## 目录结构
 
@@ -196,7 +222,9 @@ docs/                    设计文档（阶段 0 交付物，全项目契约来�
 mod/                     Java 8 模组（ModTheSpire + BaseMod）
 packages/spire-core/     纯逻辑：公平过滤 / 序列化 / 候选 / 构题 / 裁决（零依赖，可整包搬远端）
 packages/spire-agent/    主循环 / 桥接 / Laya 客户端 / 采集 / 观战面板
-tools/                   setup_dev / build_mod / install_mod / test_mod / decompile / javap_api /
+finetune/                微调：build（数据->训练项）/ train（RLCD）/ eval / serve / run_all.sh / tests
+tools/                   setup_dev / setup_laya / serve_laya（起 Laya 服务）/ finetune_laya（微调一条龙）/
+                         build_mod / install_mod / test_mod / decompile / javap_api /
                          laya_health（远端健康检查）/ fake_laya_server（本地假 Laya）
 dataset/export.py        确定性导出脚本（产物 gitignore）
 runs/                    对局记录（gitignore）
@@ -206,6 +234,6 @@ ref/                     反编译参考源（gitignore）
 ## v1 边界
 
 - 目标 **STS1 v2.3.4 Steam 版**；默认 Ironclad / Ascension 0；**严格公平**（`fairness_mode="strict"`）。
-- 不含 OCR 通道（只预留抽象接口）；不在线微调，只产数据集。
+- 不含 OCR 通道（只预留抽象接口）；**不在线微调**（微调是离线的独立流程，见 [docs/13-finetune.md](docs/13-finetune.md)），agent 跑局时不做权重更新。
 - 单机单局串行；不做 TLS / 不做并发多局。
-- 微调流程与后续路线（虚拟思考链、OCR、评测）见 `docs/12-roadmap.md`。
+- 微调流程见 [docs/13-finetune.md](docs/13-finetune.md)；后续路线（虚拟思考链、OCR、评测）见 [docs/12-roadmap.md](docs/12-roadmap.md)。

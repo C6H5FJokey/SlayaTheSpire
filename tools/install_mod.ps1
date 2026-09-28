@@ -1,9 +1,9 @@
-<#
+﻿<#
   把构建好的模组 jar 复制进 <STS>\mods\（会先备份同名旧文件）。
 
   用法：
-    pwsh -File tools/install_mod.ps1
-    pwsh -File tools/install_mod.ps1 -Jar mod\build\spireagent.jar
+    powershell -File tools/install_mod.ps1
+    powershell -File tools/install_mod.ps1 -Jar mod\build\spireagent.jar
 #>
 [CmdletBinding()]
 param(

@@ -8,7 +8,7 @@ Laya 可以跑在**本机**，也可以跑在远端：agent 只看 `[laya].base_
 `httpx`，没必要背上 torch）：
 
 ```powershell
-pwsh -File tools\setup_laya.ps1
+powershell -File tools\setup_laya.ps1
 ```
 
 它做三件事：
@@ -24,13 +24,18 @@ pwsh -File tools\setup_laya.ps1
 起服务：
 
 ```powershell
-pwsh -File tools\serve_laya.ps1                       # 127.0.0.1:8000，只预加载 english
-pwsh -File tools\serve_laya.ps1 -Models english,multilingual
-pwsh -File tools\serve_laya.ps1 -ApiKey <key>         # 设了之后 agent 侧要填同一个 key
+powershell -File tools\serve_laya.ps1                       # 127.0.0.1:8000，只预加载 english
+powershell -File tools\serve_laya.ps1 -Models english,multilingual
+powershell -File tools\serve_laya.ps1 -ApiKey <key>         # 设了之后 agent 侧要填同一个 key
 ```
 
 脚本固定 `LAYA_DEVICE=cuda`、`LAYA_PRELOAD=1`，且**只监听 loopback**。要跨机访问必须自己
 改 `-Bind`，并且**一定**配上 `-ApiKey`。
+
+上面这些脚本用系统自带的 **Windows PowerShell 5.1** 就能跑（`powershell -File ...`），不需要另装 PowerShell 7。
+`.ps1` 带 UTF-8 BOM 正是为了这个：5.1 读**无 BOM** 的 .ps1 会按系统 ANSI（中文 Windows = GBK）解码，
+中文注释会直接把字符串截断、报「字符串缺少终止符」；PowerShell 7 有 BOM 也照读。
+若提示执行策略，用 `powershell -ExecutionPolicy Bypass -File ...`。
 
 ### 进程归属：谁起的归谁
 
@@ -136,7 +141,7 @@ docker compose -f compose.cuda.yaml up -d
 ## 健康检查
 
 ```bash
-# 在本仓库根目录跑（先 pwsh -File tools\setup_dev.ps1 建好 venv）
+# 在本仓库根目录跑（先 powershell -File tools\setup_dev.ps1 建好 venv）
 .\.venv\Scripts\python.exe tools\laya_health.py --base-url http://<host>:8000 --api-key <key>
 ```
 

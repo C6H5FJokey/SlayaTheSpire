@@ -220,7 +220,7 @@ latency_p50/p95:
 
 ## 本地跑法
 
-先在仓库根目录建好 venv（`pwsh -File tools\setup_dev.ps1`，装完之后不需要激活、不需要 `PYTHONPATH`）。
+先在仓库根目录建好 venv（`powershell -File tools\setup_dev.ps1`，装完之后不需要激活、不需要 `PYTHONPATH`）。
 下面的命令都在**仓库根目录**执行。
 
 ```powershell
@@ -228,7 +228,7 @@ latency_p50/p95:
 .\.venv\Scripts\python.exe -m pytest packages\spire-core\tests -q
 
 # L2（需要 JDK；不需要游戏）
-pwsh -File tools\test_mod.ps1
+powershell -File tools\test_mod.ps1
 
 # L3
 .\.venv\Scripts\python.exe -m pytest packages\spire-agent\tests -q

@@ -1,4 +1,4 @@
-<#
+﻿<#
   一次性环境：在仓库里建 .venv-laya，装「本机 Laya 服务」（CUDA torch + laya[serve]）。
 
   为什么和 .venv 分开：agent 侧的 .venv 只需要 httpx；torch 的 CUDA 轮子约 2.5 GB，
@@ -11,10 +11,10 @@
   uv 的独立 CPython 自带匹配的 MSVC 运行库，没有这个坑。没有 uv 才回退到 `python -m venv`。
 
   用法（仓库根目录）：
-    pwsh -File tools/setup_laya.ps1                # 首次；已存在则只补装
-    pwsh -File tools/setup_laya.ps1 -Recreate      # 推倒重建
-    pwsh -File tools/setup_laya.ps1 -Cuda cu130    # 换 CUDA 轮子（默认 cu128）
-    pwsh -File tools/setup_laya.ps1 -NoModel       # 只装包，不下模型
+    powershell -File tools/setup_laya.ps1                # 首次；已存在则只补装
+    powershell -File tools/setup_laya.ps1 -Recreate      # 推倒重建
+    powershell -File tools/setup_laya.ps1 -Cuda cu130    # 换 CUDA 轮子（默认 cu128）
+    powershell -File tools/setup_laya.ps1 -NoModel       # 只装包，不下模型
 
   模型落在仓库内 .cache\huggingface（已 gitignore）。起服务见 tools\serve_laya.ps1。
 #>
@@ -101,4 +101,4 @@ if (-not $NoModel) {
 if ($LASTEXITCODE -ne 0) { throw "torch 起不来（见上面的报错）" }
 
 Write-Host "[laya] ok -> $py" -ForegroundColor Green
-Write-Host '[laya] 起服务：pwsh -File tools\serve_laya.ps1' -ForegroundColor Cyan
+Write-Host '[laya] 起服务：powershell -File tools\serve_laya.ps1' -ForegroundColor Cyan

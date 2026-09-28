@@ -1,11 +1,11 @@
-<#
+﻿<#
   在本机起 Laya HTTP 服务（用 tools\setup_laya.ps1 装好的 .venv-laya）。
 
   用法：
-    pwsh -File tools\serve_laya.ps1                          # 127.0.0.1:8000，只预加载 english
-    pwsh -File tools\serve_laya.ps1 -Models english,multilingual
-    pwsh -File tools\serve_laya.ps1 -ApiKey <key>             # 设了之后 agent 侧要填同一个 key
-    pwsh -File tools\serve_laya.ps1 -AllowDownload            # 允许联网解析 checkpoint
+    powershell -File tools\serve_laya.ps1                          # 127.0.0.1:8000，只预加载 english
+    powershell -File tools\serve_laya.ps1 -Models english,multilingual
+    powershell -File tools\serve_laya.ps1 -ApiKey <key>             # 设了之后 agent 侧要填同一个 key
+    powershell -File tools\serve_laya.ps1 -AllowDownload            # 允许联网解析 checkpoint
 
   默认只监听 loopback。要跨机访问必须自己改 -Bind，并且一定配上 -ApiKey。
   checkpoint 在 setup 阶段就整仓下好了，所以默认 **离线** 起（HF_HUB_OFFLINE=1）：
@@ -27,7 +27,7 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $py   = Join-Path $root '.venv-laya\Scripts\python.exe'
 if (-not (Test-Path -LiteralPath $py)) {
-    throw "还没装本机 Laya：先跑 pwsh -File tools\setup_laya.ps1"
+    throw "还没装本机 Laya：先跑 powershell -File tools\setup_laya.ps1"
 }
 
 $env:HF_HOME        = Join-Path $root '.cache\huggingface'

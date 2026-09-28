@@ -43,7 +43,7 @@ SlayaTheSpire 的契约文档。**代码是文档的实现，文档是代码的�
 ## 当前状态
 
 - 阶段 0（本目录）已定稿；阶段 1-4 已落地：`spire-core` / `spire-agent` / 模组均有测试覆盖
-  （`.\.venv\Scripts\python.exe -m pytest packages -q`、`pwsh -File tools\test_mod.ps1`）。
+  （`.\.venv\Scripts\python.exe -m pytest packages -q`、`powershell -File tools\test_mod.ps1`）。
 - 采集 -> 导出的完整链路可离线跑通：`python tools/demo_observe_session.py`。
 - 剩余工作（观战面板细化、远程部署脚本、端到端验收、微调）见 [12-roadmap](12-roadmap.md)
   与 [11-testing](11-testing.md) 的验收清单。

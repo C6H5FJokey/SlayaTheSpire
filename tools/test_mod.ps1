@@ -1,8 +1,8 @@
-<#
+﻿<#
   只跑模组的纯逻辑自检（不需要启动游戏）。CI 与快速迭代用这个。
 
   用法：
-    pwsh -File tools/test_mod.ps1
+    powershell -File tools/test_mod.ps1
 #>
 [CmdletBinding()]
 param(

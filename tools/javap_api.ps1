@@ -1,9 +1,9 @@
-<#
+﻿<#
   查一个类的公开 API（模组写代码时的"字典"）。
 
   用法：
-    pwsh -File tools/javap_api.ps1 com.megacrit.cardcrawl.characters.AbstractPlayer
-    pwsh -File tools/javap_api.ps1 com.megacrit.cardcrawl.ui.buttons.ProceedButton -All
+    powershell -File tools/javap_api.ps1 com.megacrit.cardcrawl.characters.AbstractPlayer
+    powershell -File tools/javap_api.ps1 com.megacrit.cardcrawl.ui.buttons.ProceedButton -All
 #>
 [CmdletBinding()]
 param(

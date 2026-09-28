@@ -1,4 +1,4 @@
-<#
+﻿<#
   把 desktop-1.0.jar 解到 ref/game-src/（class 文件 + javap 反汇编文本）。
 
   不做真正的反编译：本机没有 CFR/procyon，也不联网下载。`javap -p -c` 已经够用 ——
@@ -10,8 +10,8 @@
     ref/javap_bc_<cls>.txt  需要细看字节码的类的 javap -p -c 输出
 
   用法：
-    pwsh -File tools/decompile.ps1                     # 解压 + 常用类的签名表
-    pwsh -File tools/decompile.ps1 -Class com.megacrit.cardcrawl.dungeons.AbstractDungeon -Bytecode
+    powershell -File tools/decompile.ps1                     # 解压 + 常用类的签名表
+    powershell -File tools/decompile.ps1 -Class com.megacrit.cardcrawl.dungeons.AbstractDungeon -Bytecode
 #>
 [CmdletBinding()]
 param(

@@ -1,9 +1,9 @@
-<#
+﻿<#
   打包模组：javac --release 8 + jar，零 Gradle、零第三方依赖。
 
   用法：
-    pwsh -File tools/build_mod.ps1                 # 构建 mod/build/spireagent.jar
-    pwsh -File tools/build_mod.ps1 -SkipSelfTest   # 跳过纯逻辑自检
+    powershell -File tools/build_mod.ps1                 # 构建 mod/build/spireagent.jar
+    powershell -File tools/build_mod.ps1 -SkipSelfTest   # 跳过纯逻辑自检
 
   产物（<STS>\mods\SlayaTheSpireAgent.jar）由 tools/install_mod.ps1 复制。
 #>

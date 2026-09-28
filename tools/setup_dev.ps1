@@ -1,9 +1,9 @@
-<#
+﻿<#
   一次性开发环境：在仓库里建 .venv，并以**可编辑模式**装上 spire-core / spire-agent。
 
   用法（仓库根目录，或任意目录都行）：
-    pwsh -File tools/setup_dev.ps1              # 首次；已存在则只补装
-    pwsh -File tools/setup_dev.ps1 -Recreate    # 推倒重建
+    powershell -File tools/setup_dev.ps1              # 首次；已存在则只补装
+    powershell -File tools/setup_dev.ps1 -Recreate    # 推倒重建
 
   装完之后**不需要**激活、也不需要 PYTHONPATH，直接用 venv 里的解释器就行：
     .\.venv\Scripts\python.exe -m spire_agent run --config spire.local.toml

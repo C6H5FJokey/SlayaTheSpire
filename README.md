@@ -91,13 +91,16 @@
 
 **所有命令都在仓库根目录跑**——`--config` 的相对路径、`runs/`、`dataset/` 都相对当前目录解析。
 
+下面的 `powershell -File ...` 用系统自带的 **Windows PowerShell 5.1** 就行，不需要另装 PowerShell 7。
+若报执行策略，改成 `powershell -ExecutionPolicy Bypass -File ...`。
+
 ```powershell
 # 0) 一次性：建 .venv 并以可编辑模式装 spire-core / spire-agent（唯一外部依赖 httpx）
-pwsh -File tools/setup_dev.ps1
+powershell -File tools/setup_dev.ps1
 
 # 1) 构建 + 安装模组
-pwsh -File tools/build_mod.ps1          # -> mod/build/spireagent.jar（含纯逻辑自检）
-pwsh -File tools/install_mod.ps1        # 复制到 <STS>\mods\
+powershell -File tools/build_mod.ps1          # -> mod/build/spireagent.jar（含纯逻辑自检）
+powershell -File tools/install_mod.ps1        # 复制到 <STS>\mods\
 
 # 2) 用 ModTheSpire 启动游戏，勾选 SlayaTheSpire Agent
 #    模组配置走 MTS 的 SpireConfig("spireagent", "SlayaTheSpire")，只读 host / port（默认 127.0.0.1:17777）；
@@ -107,7 +110,7 @@ pwsh -File tools/install_mod.ps1        # 复制到 <STS>\mods\
 #    ★ 自己开一个 PowerShell 窗口跑，别塞进当下的临时 shell —— 服务归启动它的那个终端，
 #      终端一关端口就空了，症状就是 agent 预检报 WinError 10061（连接被拒绝）。
 #    真模型（本机 GPU、离线、首次加载几十秒；没装过先跑 tools/setup_laya.ps1）：
-pwsh -File tools/serve_laya.ps1
+powershell -File tools/serve_laya.ps1
 #    确认真在监听：netstat -ano | Select-String ':8000'     # 要看到 LISTENING
 #    没有 GPU / 只想先验链路：见下面「没有远端 Laya 时…」（假 Laya，不是模型）
 
@@ -183,7 +186,7 @@ python -m spire_agent run --config spire.local.toml
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest packages/spire-core/tests packages/spire-agent/tests -q
-pwsh -File tools/test_mod.ps1     # 模组纯逻辑自检（无需游戏）
+powershell -File tools/test_mod.ps1     # 模组纯逻辑自检（无需游戏）
 ```
 
 ## 目录结构

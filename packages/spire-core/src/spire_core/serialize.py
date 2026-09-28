@@ -24,6 +24,7 @@ from .model import (
     RawMap,
     RewardDetail,
     SCREEN_NONE,
+    ZonedCard,
 )
 
 MODE_COMBAT = "combat"
@@ -90,6 +91,14 @@ def _reward_detail(d: RewardDetail) -> dict[str, Any]:
     if d.amount:
         out["amount"] = d.amount
     return out
+
+
+def _zoned_entry(zc: ZonedCard) -> dict[str, Any]:
+    """选牌界面里的一个候选：`id` 与候选 id 完全一致，另带可选的 `draw_order`。"""
+    entry = _card_entry(zc.card, f"{zc.zone}:{zc.card.index}")
+    if zc.draw_order:
+        entry["draw_order"] = zc.draw_order
+    return entry
 
 
 def _player(fair: FairObservation) -> dict[str, Any]:
@@ -192,13 +201,18 @@ def state(fair: FairObservation, *, compact_deck: bool = True) -> dict[str, Any]
         screen_out["event_name"] = screen.event_name
     if screen.event_text:
         screen_out["event_text"] = screen.event_text
+    # 检索 / 预见这类"选一张牌"的界面，游戏自己的提示语就是最贴切的人话
+    # （"Choose a Card to Put on Top of Your Draw Pile."）。`origin` 是机器可读的
+    # 来由，`reason` 是玩家读到的那句。
+    if screen.reason:
+        screen_out["reason"] = screen.reason
     if screen.select_cards:
         screen_out["min_select"] = screen.min_select
         screen_out["max_select"] = screen.max_select
-        screen_out["selectable"] = [
-            _card_entry(zc.card, f"{zc.zone}:{zc.card.index}")
-            for zc in screen.select_cards
-        ]
+        # `id` 与候选 / 动作 id 严格一致（`<zone>:<index>`）；`draw_order` 只有
+        # 预见界面才有，是"哪张离抽牌堆顶更近"的提示，玩家在界面上看得见，
+        # 因此不参与任何 id 的构造（改动它也改变不了候选对齐）。
+        screen_out["selectable"] = [_zoned_entry(zc) for zc in screen.select_cards]
     if screen.reward_details:
         # 与 `options` 逐条对齐：`options` 里已经带了文案，这里给结构化内容，
         # 尤其是卡牌奖励那三张牌的名字（"再点进去值不值"就靠它判断）。

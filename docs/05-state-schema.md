@@ -111,9 +111,10 @@ mod 上报的完整结构。**字段名与游戏对象一一对应**，不做美
 | 字段 | 出现界面 | 说明 |
 |---|---|---|
 | `options[]` / `option_ids[]` | EVENT / NEOW / COMBAT_REWARD / REST / SHOP | 界面按钮文本与机器可读 id |
-| `select_cards[]` | GRID / HAND_SELECT | 可选牌（`zone` + `index`），顺序即下标 |
+| `select_cards[]` | GRID / HAND_SELECT | 可选牌（`zone` + `index` + 可选的 `draw_order`），顺序即下标 |
 | `min_select` / `max_select` | GRID / HAND_SELECT | `min == max > 0` 是"必选 k 张"，否则"任意多选" |
 | `origin` | GRID / HAND_SELECT | 选牌的**来由**，见下 |
+| `reason` | GRID / HAND_SELECT / 其它按钮界面 | 游戏写在界面上的那句提示语（英文），玩家抬头就能读到。拿不到时整个字段不出现 |
 | `event_name` / `event_text` | 事件房里的任意界面 | 事件英文名与开场正文 |
 | `reward_cards[]` | CARD_REWARD | 三选一的候选牌 |
 | `reward_relics[]` | BOSS_RELIC / COMBAT_REWARD | Boss / 宝箱备选遗物 |
@@ -122,9 +123,23 @@ mod 上报的完整结构。**字段名与游戏对象一一对应**，不做美
 | `rest_options[]` | REST | "Rest" / "Smith" 等按钮文本 |
 | `neow_options[]` | NEOW | Neow 起始选项 |
 
-`origin` 取值：`rest_smith | event | transform | purge | upgrade | confirm | select | hand_select`。
+`origin` 取值：`rest_smith | event | transform | purge | upgrade | confirm | combat_select | scry | select | hand_select`。
+
 选牌界面本身不带语义，"同一张 `Strike` 该升、该删、还是留着"完全取决于谁开的这块界面，
 所以来由必须进 state（详见 [06-decision-points](06-decision-points.md#select_card_must_k必选-k-张)）。
+其中两个是**战斗内的牌堆检索**：
+
+- `combat_select`：头槌（弃牌堆 -> 抽牌堆顶）、全息影像（弃牌堆 -> 手牌）、发掘（消耗堆）、
+  秘密技法/秘密武器、万能药……具体效果由界面上的 `reason` 说明（"Choose a Card to Put on
+  Top of Your Draw Pile."），`origin` 只负责说清"这是战斗里的一次挑牌"。
+- `scry`：观者的预见。候选牌的 `zone` 与 `draw_order` 一起给出"这几张牌在抽牌堆顶的
+  顺序"（`draw_order = 1` 是下一张会抽到的牌），这一小段顺序玩家在界面上看得见，
+  见 [04-fairness](04-fairness.md#3-预见的例外只有雪片一样摊在界面上的那几张牌才有顺序)。
+
+`zone` 的取值是 `hand | draw | discard | exhaust | deck | offer`。`offer` 表示"这组候选牌
+不属于任何一个牌堆"—— 攻击/技能/能力药水那种当场造出来给你挑的牌（见 `ZoneGuess`，
+纯逻辑、可离线单测）。临时牌组（预见 / 秘密技法 / 药水）跟玩家牌堆不是同一个对象，
+只能按"这些牌现在住在哪个堆"反查；一个牌实例同时只住一个堆，所以判据是精确的。
 
 `reward_details[]` 的每一项：
 
@@ -250,6 +265,7 @@ state 里（可见性依据见 [04-fairness](04-fairness.md#字段级规则)）�
 | `player.potion_slots` | int | 槽位总数（人类看得见有几格） |
 | `player.powers[]` | `id` / `amount` / `name` / `text` | 增益/减益的说明文本 |
 | 手牌 / 奖励卡 / 可选牌 / 商店卡 | `type` / `rarity` | 攻击/技能/能力与稀有度，选卡时的第一眼信息 |
+| `screen.selectable[]` | `draw_order` | 只有预见界面才有：`1` 是下一张会抽到的牌（界面上的先后顺序） |
 | `monsters[].powers[]` | `id` / `amount` / `name` / `text` | 同上 |
 | `screen.shop[]` | `index` / `kind` / `id` / `name` / `text` / `price` / `affordable` | 原来只有 kind/id/price，人类在货架上读得到卡面 |
 

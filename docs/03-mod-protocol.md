@@ -103,8 +103,9 @@ python -m spire_agent doctor --mode observe_human      # 只验握手 + configur
 - `seq` 在 mod 进程内全局自增，跨 run 不重置。
 - `raw.screen_state` 里有两个"执行侧必需"的分组（schema 见
   [05-state-schema](05-state-schema.md#screen_state)）：
-  - **选牌界面的来由**：`origin`（`rest_smith`/`event`/`transform`/`purge`/`upgrade`/`confirm`/`select`/`hand_select`）
-    与事件上下文 `event_name`/`event_text` —— 选牌是**有状态**的，没有这些就无法判断该选哪张；
+  - **选牌界面的来由**：`origin`（`rest_smith`/`event`/`transform`/`purge`/`upgrade`/`confirm`/`combat_select`/`scry`/`select`/`hand_select`）、
+    界面提示语 `reason`、以及事件上下文 `event_name`/`event_text` —— 选牌是**有状态**的，
+    没有这些就无法判断该选哪张、这次检索在干什么；
   - **奖励明细** `reward_details[]`：与 `options[]` 逐条对齐，卡牌奖励带上那三张牌的名字，
     免得模型"点进去看一眼再退出来"。
 
@@ -221,7 +222,29 @@ mod 只在**稳定态**发 `observation`。稳定态的定义：
 
 1. `AbstractDungeon.actionManager` 的动作队列为空且不在处理阶段；
 2. 当前 `AbstractDungeon.screen` 处于**等待输入**的状态（`NONE` 战斗内可操作、`CARD_REWARD`、`MAP`、`EVENT`、`SHOP_ROOM` 等）；
-3. 不存在正在播放的、会改变状态的非 idle 界面（如牌飞行动画、遗物弹出动画）。
+3. 不存在正在播放的、会改变状态的非 idle 界面（如牌飞行动画、遗物弹出动画）；
+4. **例外：`GRID` 选牌界面（含 `HAND_SELECT`）开着时直接判为稳定**，哪怕动作队列非空。
+
+第 4 条是本项目踩过的最深的坑，改动前请先读完这段。**选牌界面会自己把
+`isScreenUp` 置真**（`GridCardSelectScreen.callOnOpen` / `HandCardSelectScreen.prep`
+都写 `AbstractDungeon.screen = GRID`、`isScreenUp = true`），而玩法循环是
+
+```java
+// AbstractRoom.update()
+if (!AbstractDungeon.isScreenUp) { actionManager.update(); player.updateInput(); }
+```
+
+于是**驱动这个界面的动作会一直停在队列里**：铁甲战士的「头槌」
+（`DiscardPileToTopOfDeckAction`）与观者的「预见」（`ScryAction`）都是
+`actionType = CARD_MANIPULATION` 的动作，它们在 `update()` 里 `open()` 出选牌界面
+后就把 `isDone` 留成 false，等着玩家挑牌 —— 只要界面开着，`actionManager.update()`
+就不再被调用，`phase` 永远是 `EXECUTING_ACTIONS`、`currentAction` 永远非空、
+`actions/cardQueue/monsterQueue` 都不空。
+
+只按 1–3 条判定的后果是：这类界面**一个 `observation` 都发不出去**，而动作执行
+成功时 `watchdog.disarm()` 已经把看门狗关了 —— 真机症状就是"打完头槌界面卡死、
+模组静默"。所以稳定性判定必须把"选牌界面"当作**等待人类输入**的一种，而不是
+"队列没空"。
 
 实现方式：在主更新循环末尾采样上述条件，并加一个**去抖窗口**（连续 N 帧满足才发），避免动画最后一帧的抖动造成重复观测。
 
@@ -233,7 +256,8 @@ mod 侧的看门狗是**游戏不卡死的唯一保证**。
 
 - 每当 mod 发出 `observation` 后开始计时，等待 agent 的 `action`。
 - 超时（`watchdog_sec`，由 `configure` 推送，默认 30s）仍未收到合法动作，mod 执行**安全默认动作**：
-  - 战斗内：`end_turn`
+  - **选牌界面开着**（`GRID` / `HAND_SELECT`）：只有在"可以一张都不选"的界面上才有安全默认动作 —— 什么都不选直接确认（`select_cards(indices=[])`，预见 = 什么都不丢）。必选 k 张的界面（头槌 / 锻造 / 删牌 / 澄明）替人类挑一张是有后果的决策，**宁可不做**，只记录。注意这一条必须排在"战斗内"前面：选牌界面开着时 `end_turn` 会带着界面把一步走掉。
+  - 战斗内（没有选牌界面）：`end_turn`
   - 有选项界面：`select_choice(0)`
   - 有继续/确认按钮：`proceed`
   - 其他：不做任何事，仅记录
@@ -262,7 +286,8 @@ agent 侧：`ping` 每 5s 一次；连续 3 次无 `pong` 判定连接失效并�
   - 事件选项：`GenericEventDialog.update` / `RoomEventDialog.update`；
   - 卡牌奖励的拿牌与跳过：`CardRewardScreen.acquireCard` / `skippedCards`；
   - 商店买卡 / 买遗物 / 买药水 / 删牌：`ShopScreen.purchaseCard` / `StoreRelic.purchaseRelic` / `StorePotion.purchasePotion` / `ShopScreen.purgeCard`；
-  - 篝火休息 / 锻造：`RestOption.useOption` / `SmithOption.useOption`。
+  - 篝火休息 / 锻造：`RestOption.useOption` / `SmithOption.useOption`；
+  - 选牌界面的确认（`GRID`）：`AbstractDungeon.closeCurrentScreen` 前缀 —— 单张必选（"点牌 -> 确认"）与任意多选（"点若干张 -> 确认"）两条路都汇到这里；该前缀里 `selectedCards` 还没被清空，所以读到的就是人类刚选的那组牌，按**提交顺序**上报成 `select_cards{indices=[[zone,index],…]}`。
 - 只上报"已提交"：出牌需等到 `playCard` 真正被调用；人类在确认前反复点选不会产生记录。
 - 上报的 `kind`/`args` 与 `action` 消息**完全同构**，这样数据集里 `human_action` 才能直接和 agent 的候选集做匹配（见 [08-dataset](08-dataset.md#候选命中匹配)）。
 - 游戏内语言不影响语义捕获（我们读的是对象与索引，不是文本）。
@@ -272,7 +297,7 @@ agent 侧：`ping` 每 5s 一次；连续 3 次无 `pong` 判定连接失效并�
   `ShopScreen.purchaseCard(AbstractCard)` 要写成 `Prefix(ShopScreen __instance, AbstractCard card)`），
   写错会在加载模组时抛 `CannotCompileException: Prefix(...) not found` 而让**游戏起不来**。
   `SelfTest.checkPatches` 会在 `tools\build_mod.ps1` 阶段拦住这类错误（见 [11-testing](11-testing.md#l2mod-单测清单)）。
-- **已知缺口**：宝箱房、Boss 遗物三选一、Neow 起始奖励、商店"离开"、战斗奖励界面的"继续"、以及 `GRID` 选牌界面的确认 —— 这些界面的人类操作目前**不上报**，会记成 `matched=false`（这正是候选枚举器与捕获面的改进信号，不要丢）。
+- **已知缺口**：宝箱房、Boss 遗物三选一、Neow 起始奖励、商店"离开"、战斗奖励界面的"继续"，以及 `HandCardSelectScreen` 的确认 —— 这些界面的人类操作目前**不上报**，会记成 `matched=false`（这正是候选枚举器与捕获面的改进信号，不要丢）。`HandCardSelectScreen` 覆盖不了的原因很具体：它选一张牌就从 `hand` 里摘一张，等界面关闭时已经回推不出"当时的下标"，只能等后续版本改成在 `update()` 里跟踪。
 
 ## 相关文档
 

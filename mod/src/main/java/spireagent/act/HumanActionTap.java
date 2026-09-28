@@ -1,5 +1,6 @@
 package spireagent.act;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -10,6 +11,7 @@ import com.megacrit.cardcrawl.dungeons.AbstractDungeon;
 import com.megacrit.cardcrawl.map.MapRoomNode;
 import com.megacrit.cardcrawl.monsters.AbstractMonster;
 import com.megacrit.cardcrawl.potions.AbstractPotion;
+import com.megacrit.cardcrawl.screens.select.GridCardSelectScreen;
 import com.megacrit.cardcrawl.ui.buttons.LargeDialogOptionButton;
 
 import spireagent.Reflect;
@@ -61,6 +63,12 @@ public final class HumanActionTap {
     private static boolean dialogWaitingBefore;
     /** 地图 `update()` 前缀看到的 `DungeonMapScreen.clicked`。 */
     private static boolean mapClickBefore;
+    /**
+     * 选牌界面（GRID）的去重闩锁：`closeCurrentScreen()` 一屏只报一次。
+     *
+     * 界面重新打开 / 关掉时由 {@link #pollGridCommitLatch()} 复位。
+     */
+    private static boolean gridCommitReported;
 
     private HumanActionTap() {
     }
@@ -281,6 +289,82 @@ public final class HumanActionTap {
         emit(payload(ActionSpec.SELECT_CARD_REWARD, args));
     }
 
+    /**
+     * 选牌界面（GRID）的提交点：`AbstractDungeon.closeCurrentScreen()` 前缀。
+     *
+     * 选牌没有语义化的确认入口 —— 单张必选是"点牌 -> 进确认屏 -> 点确认"，
+     * 任意多选（预见）是"点若干张 -> 点确认"，两条路最后都汇到
+     * `closeCurrentScreen()`；所以在这一个前缀里一次性把"选中的牌 -> 池下标"
+     * 记下来。
+     *
+     * 下标取 `targetGroup.group` 里的**位置**：选牌期间这个池不变（界面自己的
+     * 临时池从打开到关闭都是同一份），观测侧报的也是同一个位置，两边天然对齐。
+     * 顺序按人类**提交**的顺序，agent 侧据此拆成逐次提问的训练行（`human_card_rows`）。
+     *
+     * 只覆盖 GRID。`HandCardSelectScreen` 不在这里报：它选一张就从 `hand` 里
+     * 摘一张，等到界面关闭时已经回推不出"当时的下标"了（见 docs/03 的已知缺口）。
+     */
+    public static void noteGridCommit() {
+        try {
+            if (AbstractDungeon.screen != AbstractDungeon.CurrentScreen.GRID) {
+                return;
+            }
+            GridCardSelectScreen gs = AbstractDungeon.gridSelectScreen;
+            if (gs == null || gs.isJustForConfirming
+                    || gs.targetGroup == null || gs.targetGroup.group == null) {
+                return;
+            }
+            List<AbstractCard> pool = gs.targetGroup.group;
+            List<Object> indices = new ArrayList<Object>();
+            if (gs.selectedCards != null) {
+                for (AbstractCard c : gs.selectedCards) {
+                    int index = identityIndexOf(pool, c);
+                    if (index < 0) {
+                        continue;
+                    }
+                    List<Object> pair = new ArrayList<Object>();
+                    pair.add(Observer.zoneOf(gs.targetGroup));
+                    pair.add(Integer.valueOf(index));
+                    indices.add(pair);
+                }
+            }
+            synchronized (LOCK) {
+                if (gridCommitReported) {
+                    return;
+                }
+                gridCommitReported = true;
+            }
+            Map<String, Object> args = new LinkedHashMap<String, Object>();
+            args.put("indices", indices);
+            emit(payload(ActionSpec.SELECT_CARDS, args));
+        } catch (RuntimeException e) {
+            spireagent.Log.warn("grid commit capture failed: " + e);
+        }
+    }
+
+    /** 每帧调用：离开选牌界面后复位闩锁（下一次打开才能再报一次）。 */
+    public static void pollGridCommitLatch() {
+        try {
+            if (AbstractDungeon.screen != AbstractDungeon.CurrentScreen.GRID) {
+                synchronized (LOCK) {
+                    gridCommitReported = false;
+                }
+            }
+        } catch (RuntimeException e) {
+            // 装载期拿不到屏幕状态：保持闩锁原样就好
+        }
+    }
+
+    /** 按**引用**找下标（绝不用 equals：同名同升级的牌是不同实例）。 */
+    private static int identityIndexOf(List<AbstractCard> pool, AbstractCard card) {
+        for (int i = 0; i < pool.size(); i++) {
+            if (pool.get(i) == card) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
     /** 每帧调用：卡牌奖励界面消失（没有候选牌了）时清闩锁。 */
     public static void pollCardRewardLatch() {
         if (Observer.cardRewardCards().isEmpty()) {
@@ -360,6 +444,7 @@ public final class HumanActionTap {
             lastEventButton = null;
             lastCardRewardCard = null;
             lastCardRewardSkip = false;
+            gridCommitReported = false;
         }
     }
 }

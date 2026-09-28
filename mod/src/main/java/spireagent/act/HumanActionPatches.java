@@ -38,10 +38,12 @@ import spireagent.SlDetector;
  * | 跳过卡牌奖励 | `CardRewardScreen.skippedCards` 前缀 | `select_card_reward(-1)` |
  * | 商店购买 | `ShopScreen.purchaseCard` / `StoreRelic.purchaseRelic` / `StorePotion.purchasePotion` / `ShopScreen.purgeCard` | `select_choice` |
  * | 篝火休息 / 锻造 | `RestOption.useOption` / `SmithOption.useOption` | `select_choice` |
+ * | 选牌界面确认（GRID） | `AbstractDungeon.closeCurrentScreen` 前缀 | `select_cards` |
  * | 读档（SL） | `CardCrawlGame.loadPlayerSave` 前缀 | `observation.sl` |
  *
  * 未覆盖（v1 已知缺口，agent 侧会记成 `matched=false`）：Boss 遗物点选、
- * 宝箱、商店"离开"、战斗奖励的"继续"按钮、以及 `select_cards` 类选牌确认 ——
+ * 宝箱、商店"离开"、战斗奖励的"继续"按钮、以及 `HandCardSelectScreen` 的确认
+ * （它选一张就从 `hand` 里摘一张，关界面时已经回推不出当时的下标）——
  * 这些走的是通用按钮回调，后续版本再补。
  *
  * **参数对齐规则**：MTS 的 legacy `@SpirePatch`（非 `@SpirePatch2`）把 patch 方法的
@@ -184,6 +186,21 @@ public final class HumanActionPatches {
         @SpirePrefixPatch
         public static void Prefix(SmithOption __instance) {
             HumanActionTap.noteCampfireOption(__instance);
+        }
+    }
+
+    /**
+     * 选牌界面（GRID）的提交点。
+     *
+     * 为什么挂在 `closeCurrentScreen()`：单张必选和任意多选的"确认"走的是两条
+     * 不同的分支，但最后都调用它；而且它**不清** `selectedCards`（游戏自己的
+     * 轮询者随后才去读），所以前缀里读到的就是人类刚选的东西。
+     */
+    @SpirePatch(clz = AbstractDungeon.class, method = "closeCurrentScreen")
+    public static class GridCommit {
+        @SpirePrefixPatch
+        public static void Prefix() {
+            HumanActionTap.noteGridCommit();
         }
     }
 

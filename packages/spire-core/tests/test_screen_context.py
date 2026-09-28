@@ -133,3 +133,63 @@ def test_card_reward_skip_wording_is_explicit():
     skip = [c for c in cands if c.cid == "skip"]
     assert len(skip) == 1
     assert "none of these three cards" in skip[0].description
+
+# ---------------------------------------------------- 检索类选牌（头槌 / 预见）
+
+# 头槌（DiscardPileToTopOfDeckAction）与观者的预见（ScryAction）都会**开着选牌
+# 界面停在动作队列里**，模组因此曾经一个观测都不发（见 docs/03 的稳定性判定）。
+# 这两条路的数据契约在 core 侧就是"zone + reason + 预见的 draw_order"。
+
+
+def test_reason_reaches_state_and_is_omitted_when_absent():
+    f = grid(min_select=1, max_select=1, origin="combat_select",
+             reason="Choose a Card to Put on Top of Your Draw Pile.")
+    assert f.screen_state.reason == "Choose a Card to Put on Top of Your Draw Pile."
+    state = serialize.state(f)
+    assert state["screen"]["reason"] == "Choose a Card to Put on Top of Your Draw Pile."
+    assert "reason" not in serialize.state(grid(min_select=1, max_select=1))["screen"]
+
+
+def test_combat_retrieval_purpose_is_named():
+    f = grid(min_select=1, max_select=1, origin="combat_select")
+    cands = C.enumerate_candidates(f, SELECT_CARD_MUST_K)
+    assert all("in-combat card retrieval" in c.description for c in cands)
+
+
+def test_scry_cards_carry_draw_order_and_keep_their_id():
+    """预见：`draw_order=1` 是下一张会抽到的牌；候选 id 仍然是 `<zone>:<index>`。"""
+    raw = grid_observation(min_select=0, max_select=3)
+    for i, entry in enumerate(raw["screen_state"]["select_cards"]):
+        entry["zone"] = "draw"
+        entry["draw_order"] = i + 1
+    raw["screen_state"]["origin"] = "scry"
+    raw["screen_state"]["reason"] = "Choose any number of cards to discard."
+    f = fair(raw)
+
+    assert [zc.draw_order for zc in f.screen_state.select_cards] == [1, 2, 3]
+    state = serialize.state(f)
+    selectable = state["screen"]["selectable"]
+    assert [e["draw_order"] for e in selectable] == [1, 2, 3]
+    assert [e["id"] for e in selectable] == ["draw:0", "draw:1", "draw:2"]
+    assert [c.cid for c in C.enumerate_candidates(f, SELECT_CARD_ANY)] == [
+        "card:draw:0",
+        "card:draw:1",
+        "card:draw:2",
+    ]
+    assert all("scry" in c.description for c in C.enumerate_candidates(f, SELECT_CARD_ANY))
+
+
+def test_draw_order_absent_for_plain_selection():
+    """非预见的选牌界面不能凭空多出 draw_order（那是顺序信息）。"""
+    state = serialize.state(grid(min_select=1, max_select=1))
+    assert all("draw_order" not in e for e in state["screen"]["selectable"])
+
+
+def test_select_reason_placeholder_is_a_whole_sentence_or_nothing():
+    with_reason = grid(min_select=1, max_select=1, reason="Choose a Card to Upgrade.")
+    out = questions.fill_placeholders("Pick one ({select_purpose}).{select_reason}", with_reason)
+    assert out == 'Pick one (card selection). The screen says: "Choose a Card to Upgrade."'
+    without = questions.fill_placeholders(
+        "Pick one ({select_purpose}).{select_reason}", grid(min_select=1, max_select=1)
+    )
+    assert without == "Pick one (card selection)."

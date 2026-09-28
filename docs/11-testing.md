@@ -83,6 +83,17 @@ def test_fair_view_has_no_hidden_info(raw_fixture):
 - `COMBAT_REWARD` 的 `reward_details[]` 与 `options[]` 逐条对齐，卡牌奖励带牌名与稀有度；
 - `card_reward` 的 `skip` 文案是"这三张都不想要"的口吻，不是中性的 "Skip."。
 
+检索类选牌（头槌 / 全息影像 / 发掘 / 秘密技法 / 万知药水 / 观者的预见）的数据契约
+单独列出来（`test_screen_context.py`）：
+
+- `reason`（界面提示语）能穿过 `fairness.filter_` 进 `state.screen`，拿不到时**不出现**；
+- `origin=combat_select` 的候选描述说明"这是战斗内的一次检索"；
+- 预见：`draw_order` 1/2/3 原样进 `state.screen.selectable`，而候选 id 仍然是
+  `<zone>:<index>`（`draw_order` 不参与 id，改动它不会打乱候选对齐）；
+- 非预见界面**不能**凭空多出 `draw_order`（那是顺序信息，只有玩家看得见的那一屏才给）；
+- `{select_reason}` 是"整句或空串"：有提示语时拼成 `The screen says: "…."`（不出现 `..`），
+  没有时整个消失。
+
 ### 构题合规
 
 - 每个决策点产出的 `questions` 满足：类型合法、`choice` 的 criteria 非空、`score` 的 criteria 是有序列表、题数 <= 64；
@@ -137,6 +148,10 @@ def test_fair_view_has_no_hidden_info(raw_fixture):
   过一层 `PotionFacts` 压成 false；漏了它，agent 会把空槽当成可用的药水（真机踩过：选一次被拒
   一次、state 不变，每秒多空转一轮，看门狗还被这串动作压着不触发）。
 - `StabilityGate` 去抖：连续 N 帧才放行，抖动不放行；
+- `ZoneGuess`（`SelfTest.zoneGuessTests`）：临时牌组的区域反查是"每个 uuid 都出现在某个
+  牌堆里"的精确判据 —— 头槌（弃牌堆）/ 预见（抽牌堆）各自命中；一个都不命中 -> `offer`
+  （药水那种当场造出来的牌）；混合来源 -> `offer`（一个牌实例只住一个堆）；uuid 缺失或为空
+  **不能**当证据（宁可判不出来，也不编一个区域）；空候选回落 `hand`。
 - `Eng` 英文文本（`SelfTest.engTests`，直接读游戏 jar 的 `localization/eng/*.json`）：
   卡牌/怪物/遗物/药水/power 的名字与描述；`!D!` 为 -1 时写出 `?` 而**不是** -1；
   `\bNL\b` 替换不误伤 `ONLY`；事件选项按 `[` 开头拼回碎片、被切开的数值位置留 `?`；
@@ -200,6 +215,10 @@ v1 的成功标准（**全自动，无人工干预**）：
 7. **切模式不需要重启游戏**：`doctor --mode agent` / `doctor --mode observe_human` 各跑一次，
    `configure` 回执跟着变；再 `run --mode observe_human` 起一次、`run` 起一次，
    面板同样跟着变。模组侧的 properties 文件全程不用动（真机已验，2026-09-28）。
+8. **检索类选牌不在中途卡死**（回归，真机必验）：铁甲战士打「头槌」（弃牌堆 >= 2 张时）
+   -> 界面出现后 **agent 收到观测并给出决策**，选中的牌进抽牌堆顶，战斗继续（弃牌堆只剩
+   1 张时游戏自己拿走，不出现界面）；观者的预见类卡牌 -> 出 `select_card_any`（`score`）
+   决策，可以一张都不选；两种情况下 `summary.json` 的 `watchdog_events` 保持 0。
 
 ### 验收记录模板
 

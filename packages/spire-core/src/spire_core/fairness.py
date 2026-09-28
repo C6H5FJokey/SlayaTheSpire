@@ -88,6 +88,7 @@ def _fair_screen(s: ScreenState) -> ScreenFair:
         origin=s.origin,
         event_name=s.event_name,
         event_text=s.event_text,
+        reason=s.reason,
     )
 
 

@@ -179,6 +179,7 @@ public final class SpireAgentMod implements
             drainInbox();
             guardStaleTurnHasEnded();
             HumanActionTap.pollCardRewardLatch();
+            HumanActionTap.pollGridCommitLatch();
             if (!server.connected() || !configured) {
                 // 没连 agent（或还没 configure）就不接管：
                 // 人类照常玩，游戏不会被看门狗抢走控制权，也不会发观测。
@@ -469,7 +470,22 @@ public final class SpireAgentMod implements
         watchdogEvents++;
         GameActionContext ctx = GameActionContext.get();
         Map<String, Object> result;
-        if (ctx.inCombat()) {
+        int[] bounds = ctx.selectionBounds();
+        if (bounds != null) {
+            // 选牌界面开着时**绝不能** end_turn：那会带着界面把一步走掉。只有
+            // "可以一张都不选"的界面（预见的任意多选、`confirm` 确认屏）才存在
+            // 安全的默认动作 —— 什么都不选直接确认（预见=什么都不丢）。必选 k 张
+            // 的界面（头槌 / 锻造 / 删牌 / 澄明）替人类挑一张是有后果的决策，
+            // 宁可不做，只记录（见 docs/03-mod-protocol.md#看门狗）。
+            if (bounds[0] == 0) {
+                Map<String, Object> args = new LinkedHashMap<String, Object>();
+                args.put("indices", new ArrayList<Object>());
+                result = Actor.execute(ActionSpec.SELECT_CARDS, args);
+            } else {
+                result = Errors.fail(Errors.SCREEN_MISMATCH,
+                        "card selection needs a real choice");
+            }
+        } else if (ctx.inCombat()) {
             result = Actor.execute(ActionSpec.END_TURN, empty());
         } else if (ctx.mapScreen() && !Observer.reachableNodeIds().isEmpty()) {
             Map<String, Object> args = new LinkedHashMap<String, Object>();

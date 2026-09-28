@@ -112,13 +112,22 @@ def identify(fair) -> DecisionPoint
 
 | 字段 | 含义 |
 |---|---|
-| `origin` | 来由：`rest_smith` / `event` / `transform` / `purge` / `upgrade` / `confirm` / `select` / `hand_select` |
+| `origin` | 来由：`rest_smith` / `event` / `transform` / `purge` / `upgrade` / `confirm` / `combat_select` / `scry` / `select` / `hand_select` |
 | `event_name` / `event_text` | 若在事件房里，事件的英文名与开场正文（玩家进入事件时就看得到） |
+| `reason` | 游戏写在界面上的那句提示语（玩家抬头就读得到），例如头槌的 "Choose a Card to Put on Top of Your Draw Pile." |
 
 core 侧由 `candidates.selection_purpose()` 把 `origin` 翻成一句人话，同时进
-**候选描述**与**指令占位**（`{select_purpose}`），两条路径共用同一个定义。
-判定顺序上 `origin` **先按房间判、再按界面标志位判**：`forUpgrade` / `forPurge`
-在"锻造"和"升级神龛"里取值相同，只有房间类型能区分。
+**候选描述**与**指令占位**（`{select_purpose}`），两条路径共用同一个定义；
+`reason` 另走一个占位 `{select_reason}`（整句或空串，拿不到就整个消失），
+说明"这一次检索具体在干什么"。判定顺序上 `origin` **先按房间判、再按界面标志位判**：
+`forUpgrade` / `forPurge` 在"锻造"和"升级神龛"里取值相同，只有房间类型能区分。
+
+**战斗内的牌堆检索（头槌 / 全息影像 / 发掘 / 秘密技法 / 万能药 / 观者的预见）走的就是
+这一对决策点，没有单独的决策点。** 头槌是"必选 1 张"（`min=max=1`）→
+`select_card_must_k`；观者的预见是"任意多选，可以一张都不选"（`min=0`）→
+`select_card_any`，界面上的 `draw_order` 告诉模型哪张离抽牌堆顶最近。这两条路以前
+**根本走不到决策点**：模组的稳定性判定把"选牌界面开着、动作还停在队列里"误判成不稳定，
+一个观测都不发（病根与修法见 [03-mod-protocol](03-mod-protocol.md#稳定性判定)）。
 
 ### `select_card_any`（任意多选）
 

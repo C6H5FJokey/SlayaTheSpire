@@ -15,6 +15,7 @@ import spireagent.obs.EchoGate;
 import spireagent.obs.Eng;
 import spireagent.obs.PotionFacts;
 import spireagent.obs.StabilityGate;
+import spireagent.obs.ZoneGuess;
 import spireagent.proto.ActionContext;
 import spireagent.proto.ActionSpec;
 import spireagent.proto.Errors;
@@ -23,7 +24,7 @@ import spireagent.proto.Errors;
  * 无 JUnit 的自检程序（离线环境里没有 JUnit jar）。
  *
  * 只覆盖**纯逻辑**类：Json / Envelope / ActionSpec / ShopSlots / CampfireSlots /
- * StabilityGate / EchoGate / Watchdog / SlDetector，外加 `checkPatches` 用反射
+ * StabilityGate / ZoneGuess / EchoGate / Watchdog / SlDetector，外加 `checkPatches` 用反射
  * 校验 patch 形参与目标方法签名对齐（需要 ModTheSpire + 游戏 jar，缺了会跳过）。
  * 依赖游戏类的部分只能真机冒烟（见 docs/11-testing.md）。
  *
@@ -44,6 +45,7 @@ public final class SelfTest {
         echoGateTests();
         potionFactsTests();
         engTests();
+        zoneGuessTests();
         checkPatches();
 
         System.out.println();
@@ -626,6 +628,52 @@ public final class SelfTest {
                 Eng.eventOptions("BigFish").get(0).contains("?"));
     }
 
+    // --------------------------------------------------------------- ZoneGuess
+
+    /**
+     * 临时牌组（观者的预见 / 秘密技法 / 全知 / 药水）跟玩家任何一个牌堆都**不是
+     * 同一个对象**，引用比较必然落空，只能按"这些牌现在住在哪"反查。
+     * 判据是精确的而不是启发式的：一个牌实例同时只住在一个牌堆里。
+     */
+    private static void zoneGuessTests() {
+        List<String> hand = Arrays.asList("h0", "h1");
+        List<String> draw = Arrays.asList("d0", "d1", "d2");
+        List<String> discard = Arrays.asList("x0", "x1");
+        List<String> exhaust = Arrays.asList("e0");
+        List<String> deck = Arrays.asList("m0", "m1");
+
+        // 拿不到候选时给既有的"手牌"默认，绝不凭空编一个区域。
+        eq("zone/empty-falls-back-to-hand", "hand",
+                ZoneGuess.of(new ArrayList<String>(), hand, draw, discard, exhaust, deck));
+        eq("zone/null-falls-back-to-hand", "hand",
+                ZoneGuess.of(null, hand, draw, discard, exhaust, deck));
+
+        // 头槌：池就是弃牌堆本身（走引用比较那条路，这里只验兜底判据）。
+        eq("zone/discard-pile", "discard",
+                ZoneGuess.of(Arrays.asList("x1", "x0"), hand, draw, discard, exhaust, deck));
+        // 预见：临时池里的牌此刻都还躺在抽牌堆里，所以顺序倒了也要判成 draw。
+        eq("zone/draw-pile", "draw",
+                ZoneGuess.of(Arrays.asList("d1", "d0"), hand, draw, discard, exhaust, deck));
+        eq("zone/hand-pile", "hand",
+                ZoneGuess.of(Arrays.asList("h1"), hand, draw, discard, exhaust, deck));
+        eq("zone/exhaust-pile", "exhaust",
+                ZoneGuess.of(Arrays.asList("e0"), hand, draw, discard, exhaust, deck));
+        eq("zone/master-deck", "deck",
+                ZoneGuess.of(Arrays.asList("m1"), hand, draw, discard, exhaust, deck));
+
+        // 药水那种"当场造出来"的牌：哪个堆都不住 -> offer。
+        eq("zone/potion-offer", "offer",
+                ZoneGuess.of(Arrays.asList("p0", "p1"), hand, draw, discard, exhaust, deck));
+        // 混合来源不可能是真牌堆（一个实例只住一个堆），判不出来就别硬判。
+        eq("zone/mixed-is-offer", "offer",
+                ZoneGuess.of(Arrays.asList("h0", "d0"), hand, draw, discard, exhaust, deck));
+
+        // uuid 缺失不能当证据：不误判成"住在手牌"。
+        eq("zone/null-uuid-not-evidence", "offer",
+                ZoneGuess.of(Arrays.asList("h0", null), hand, draw, discard, exhaust, deck));
+        eq("zone/blank-uuid-not-evidence", "offer",
+                ZoneGuess.of(Arrays.asList(""), hand, draw, discard, exhaust, deck));
+    }
     private static void ok(String name, boolean condition) {
         if (condition) {
             passed++;

@@ -388,14 +388,24 @@ class RawMap:
 
 @dataclass(frozen=True)
 class ZonedCard:
-    """带区域标记的牌。选牌界面（GRID）用得到：候选 id 是 `card:<zone>:<index>`。"""
+    """带区域标记的牌。选牌界面（GRID）用得到：候选 id 是 `card:<zone>:<index>`。
+
+    `draw_order` 只在观者的**预见**界面上有值（1 = 下一张会抽到的牌）。它表示
+    "这张离抽牌堆顶有多近"，是玩家在界面上直接看得见的信息（见 docs/04），
+    不参与候选 / 动作 id 的构造。
+    """
 
     zone: str
     card: RawCard
+    draw_order: int = 0
 
     @staticmethod
     def from_dict(d: dict[str, Any]) -> "ZonedCard":
-        return ZonedCard(zone=str(_d(d, "zone", ZONE_HAND)), card=RawCard.from_dict(d))
+        return ZonedCard(
+            zone=str(_d(d, "zone", ZONE_HAND)),
+            card=RawCard.from_dict(d),
+            draw_order=int(_d(d, "draw_order", 0)),
+        )
 
 
 @dataclass(frozen=True)
@@ -469,6 +479,10 @@ class ScreenState:
     origin: str = ""
     event_name: str = ""
     event_text: str = ""
+    # 界面上的提示语（游戏自己写给玩家的那句话，例如头槌的
+    # "Choose a Card to Put on Top of Your Draw Pile."）。它是玩家界面的一部分，
+    # 属于公平信息；模型看得到"这次检索是为了干什么"。
+    reason: str = ""
 
     @staticmethod
     def from_dict(d: dict[str, Any] | None) -> "ScreenState":
@@ -488,6 +502,7 @@ class ScreenState:
             origin=str(_d(d, "origin", "")),
             event_name=str(_d(d, "event_name", "")),
             event_text=str(_d(d, "event_text", "")),
+            reason=str(_d(d, "reason", "")),
         )
 
 
@@ -648,6 +663,7 @@ class ScreenFair:
     origin: str = ""
     event_name: str = ""
     event_text: str = ""
+    reason: str = ""
 
 
 @dataclass(frozen=True)

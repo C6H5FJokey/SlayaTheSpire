@@ -156,6 +156,12 @@ _ORIGIN_PURPOSE = {
     "upgrade": "upgrade a card",
     "confirm": "just confirming a group of cards",
     "hand_select": "card selection from hand",
+    # 观者的预见：看抽牌堆顶的若干张，任意张丢进弃牌堆（`draw_order` 告诉
+    # 模型哪张离牌堆顶更近）。这是"任意多选"，min=0 也合法。
+    "scry": "scry: look at that many cards from the top of your draw pile and discard any of them",
+    # 战斗内的检索（头槌 / 全息影像 / 发掘 / 秘密技法 / 万能药…）：具体效果由
+    # 界面上的 `reason` 说，`origin` 只负责说清"这是战斗里的一次挑牌"。
+    "combat_select": "in-combat card retrieval; the on-screen reason says what it does",
     "select": "card selection",
 }
 

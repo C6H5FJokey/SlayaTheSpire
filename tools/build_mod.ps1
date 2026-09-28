@@ -62,6 +62,7 @@ if (-not $SkipSelfTest) {
         'mod\src\main\java\spireagent\obs\StabilityGate.java',
         'mod\src\main\java\spireagent\obs\EchoGate.java',
         'mod\src\main\java\spireagent\obs\PotionFacts.java',
+        'mod\src\main\java\spireagent\obs\ZoneGuess.java',
         'mod\src\main\java\spireagent\obs\Eng.java',
         'mod\src\main\java\spireagent\obs\ShopSlots.java',
         'mod\src\main\java\spireagent\obs\CampfireSlots.java',

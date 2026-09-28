@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.megacrit.cardcrawl.actions.GameActionManager;
+import com.megacrit.cardcrawl.actions.utility.ScryAction;
 import com.megacrit.cardcrawl.cards.AbstractCard;
 import com.megacrit.cardcrawl.cards.CardGroup;
 import com.megacrit.cardcrawl.characters.AbstractPlayer;
@@ -79,6 +80,23 @@ public final class Observer {
                     || AbstractDungeon.screenSwap) {
                 return false;
             }
+            String screen = screenName();
+            if (screen == null || screen.startsWith("UNKNOWN:")) {
+                return false;
+            }
+            // 选牌界面开着 = 游戏自己在等玩家挑牌。这条必须先于"队列空闲"判据，
+            // 因为界面打开会**停住玩法循环**：AbstractRoom.update() 里是
+            // `if (!AbstractDungeon.isScreenUp) { actionManager.update(); ... }`，
+            // 而选牌界面（GridCardSelectScreen.callOnOpen / HandCardSelectScreen.prep）
+            // 自己把 isScreenUp 置真。于是驱动这个界面的动作会**卡在队列里**不动 ——
+            // 头槌走 DiscardPileToTopOfDeckAction、观者的预见走 ScryAction，两者都是
+            // actionType=CARD_MANIPULATION、停在 EXECUTING_ACTIONS、currentAction 非空。
+            // 用下面的判据会把这类界面永远判成"不稳定"，agent 一个观测都收不到；
+            // 而动作执行时看门狗已 disarm，连兜底都没有 —— 真机症状就是"打完头槌
+            // 界面卡死、模组静默"（见 docs/03-mod-protocol.md#稳定性判定）。
+            if (AbstractDungeon.isScreenUp && SCREEN_GRID.equals(screen)) {
+                return true;
+            }
             GameActionManager am = AbstractDungeon.actionManager;
             if (am == null || am.phase != GameActionManager.Phase.WAITING_ON_USER) {
                 return false;
@@ -86,11 +104,7 @@ public final class Observer {
             if (!am.actions.isEmpty() || !am.cardQueue.isEmpty() || !am.monsterQueue.isEmpty()) {
                 return false;
             }
-            if (am.currentAction != null) {
-                return false;
-            }
-            String screen = screenName();
-            return screen != null && !screen.startsWith("UNKNOWN:");
+            return am.currentAction == null;
         } catch (RuntimeException e) {
             return false;
         }
@@ -975,11 +989,21 @@ public final class Observer {
         }
         List<Object> cards = new ArrayList<Object>();
         String zone = zoneOf(gs.targetGroup);
+        // 预见（Scry）把抽牌堆顶的若干张摊在一个临时 CardGroup 里，顺序就是抽牌
+        // 顺序（ScryAction 自顶向下逐个 addToTop）：下标 0 就是"下一张会抽到的牌"。
+        // 这个顺序玩家在界面上直接看得到，而且"哪张是顶"正是这题的关键，所以只在
+        // 这一种界面上给出 `draw_order`。其余临时牌组（秘密技法 / 全知 / 药水）
+        // 只报 zone，不给顺序 —— 那些界面顺序无关，给了反而多泄漏信息。
+        boolean scry = scryOpen();
         if (gs.targetGroup != null && gs.targetGroup.group != null) {
             int i = 0;
             for (AbstractCard c : gs.targetGroup.group) {
                 if (c != null) {
-                    cards.add(zonedCardJson(c, i, zone));
+                    Map<String, Object> cj = zonedCardJson(c, i, zone);
+                    if (scry) {
+                        cj.put("draw_order", Integer.valueOf(i + 1));
+                    }
+                    cards.add(cj);
                 }
                 i++;
             }
@@ -996,7 +1020,7 @@ public final class Observer {
         out.put("max_select", Integer.valueOf(max));
         Object tip = Reflect.get(gs, GridCardSelectScreen.class, "tipMsg");
         out.put("reason", englishText(tip instanceof String ? (String) tip : null));
-        out.put("origin", gridOrigin(gs));
+        out.put("origin", scry ? "scry" : gridOrigin(gs));
         addEventContext(out);
     }
 
@@ -1025,6 +1049,12 @@ public final class Observer {
             }
             if (gs.isJustForConfirming) {
                 return "confirm";
+            }
+            // 战斗内的检索类选牌（头槌 / 全息 / 发掘 / 秘密技法 / 万能药…）没有
+            // forUpgrade 之类的标志位，来由只能靠"这是战斗里的一次牌堆操作"表达。
+            // 具体效果交给 `reason`（游戏自己的提示语，见 docs/05-state-schema.md）。
+            if (room != null && room.phase == AbstractRoom.RoomPhase.COMBAT) {
+                return "combat_select";
             }
             return "select";
         } catch (RuntimeException e) {
@@ -1078,8 +1108,19 @@ public final class Observer {
         return cj;
     }
 
-    /** 反查一个 CardGroup 属于哪个区域（用引用比较，绝不用内容比较）。 */
-    private static String zoneOf(CardGroup group) {
+    /**
+     * 反查一个 CardGroup 属于哪个区域。
+     *
+     * 两级判据，顺序不能反：
+     *   1. **引用比较**：`targetGroup` 就是玩家某个牌堆对象时直接命中（头槌看弃牌堆、
+     *      发掘看消耗堆、……）；
+     *   2. **内容比较**（uuid 集合）：游戏为"临时挑牌"新建的 CardGroup 跟任何牌堆都
+     *      不是同一个对象 —— 观者的预见（ScryAction）、秘密技法/秘密武器、全知、
+     *      攻击/技能/能力药水都走这一条。这时候只能按"这些牌现在住在哪个牌堆里"
+     *      反查；一个牌实例同时只会待在一个牌堆里，所以判据是精确的。
+     *      都不属于时返回 `offer`（药水那种"新造出来的三张牌"，哪都不住）。
+     */
+    public static String zoneOf(CardGroup group) {
         AbstractPlayer p = AbstractDungeon.player;
         if (group == null || p == null) {
             return ZONE_HAND;
@@ -1099,13 +1140,37 @@ public final class Observer {
         if (group == p.masterDeck) {
             return ZONE_DECK;
         }
-        return ZONE_HAND;
+        return ZoneGuess.of(uuids(group), uuids(p.hand), uuids(p.drawPile),
+                uuids(p.discardPile), uuids(p.exhaustPile), uuids(p.masterDeck));
     }
+
+    private static List<String> uuids(CardGroup group) {
+        List<String> out = new ArrayList<String>();
+        if (group == null || group.group == null) {
+            return out;
+        }
+        for (AbstractCard c : group.group) {
+            out.add(c == null || c.uuid == null ? "" : c.uuid.toString());
+        }
+        return out;
+    }
+
+    /** 当前选牌界面是不是观者的"预见"开的（ScryAction 停在队列里等玩家挑牌）。 */
+    private static boolean scryOpen() {
+        try {
+            GameActionManager am = AbstractDungeon.actionManager;
+            return am != null && am.currentAction instanceof ScryAction;
+        } catch (RuntimeException e) {
+            return false;
+        }
+    }
+
     private static final String ZONE_HAND = "hand";
     private static final String ZONE_DRAW = "draw";
     private static final String ZONE_DISCARD = "discard";
     private static final String ZONE_EXHAUST = "exhaust";
     private static final String ZONE_DECK = "deck";
+
 
     // ----- 事件 / Neow -----
 

@@ -23,13 +23,13 @@ prelude = []
 [decision_points.select_card_must_k]
 question_id = "q_pick"
 type = "choice"
-instructions = "You must select a card for the current card-selection screen ({select_purpose}). Choose the single best one; you will be asked again until the required number is reached."
+instructions = "You must select a card for the current card-selection screen ({select_purpose}).{select_reason} Choose the single best one; you will be asked again until the required number is reached."
 prelude = []
 
 [decision_points.select_card_any]
 question_id = "q_card"
 type = "score"
-instructions = "Rate how good it is to select this card for the current card-selection screen ({select_purpose}). You may select any number of cards, including none."
+instructions = "Rate how good it is to select this card for the current card-selection screen ({select_purpose}).{select_reason} You may select any number of cards, including none."
 levels = ["very bad", "bad", "neutral", "good", "very good"]
 prelude = []
 

@@ -60,13 +60,13 @@ DEFAULT_TEMPLATES: dict[str, dict[str, Any]] = {
     SELECT_CARD_MUST_K: {
         "question_id": "q_pick",
         "type": "choice",
-        "instructions": "Choose one card to select ({select_purpose}).",
+        "instructions": "Choose one card to select ({select_purpose}).{select_reason}",
         "prelude": [],
     },
     SELECT_CARD_ANY: {
         "question_id": "q_card",
         "type": "score",
-        "instructions": "Rate how good it is to select this card ({select_purpose}).",
+        "instructions": "Rate how good it is to select this card ({select_purpose}).{select_reason}",
         "levels": DEFAULT_LEVELS,
         "prelude": [],
     },
@@ -147,7 +147,11 @@ def fill_placeholders(template: str, fair: FairObservation) -> str:
     """把指令模板里的占位换成当前局面的值。
 
     支持 `{character}` / `{ascension}` / `{origin}` / `{event_name}` /
-    `{event_text}` / `{select_purpose}`。
+    `{event_text}` / `{select_purpose}` / `{select_reason}`。
+
+    `{select_reason}` 是**整句或空串**：界面上的提示语拿不到时就整个消失，
+    不会留下 `The screen says: ""` 这种残句（选牌界面在离线测试里也会出现
+    reason 为空的情况）。
 
     用最朴素的 replace 而不是 `str.format`：指令里可能出现别的大括号（例如
     JSON 片段），`format` 会直接把构题炸掉。
@@ -163,6 +167,13 @@ def fill_placeholders(template: str, fair: FairObservation) -> str:
         template = template.replace(" ({event_name})", "")
     if not s.event_text:
         template = template.replace(" ({event_text})", "")
+    reason_line = ""
+    reason = s.reason.strip()
+    if reason:
+        # 游戏自己的提示语大多自带句号，别拼出 "...Pile.."。
+        if not reason.endswith("."):
+            reason += "."
+        reason_line = f' The screen says: "{reason}"'
     return (
         template.replace("{character}", label)
         .replace("{ascension}", str(fair.ascension))
@@ -170,6 +181,7 @@ def fill_placeholders(template: str, fair: FairObservation) -> str:
         .replace("{event_name}", s.event_name)
         .replace("{event_text}", s.event_text)
         .replace("{select_purpose}", selection_purpose(fair))
+        .replace("{select_reason}", reason_line)
     )
 
 
